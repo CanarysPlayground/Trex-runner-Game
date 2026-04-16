@@ -1,9 +1,10 @@
 {
   "name": "trex-runner",
   "version": "1.0.0",
-  "description": "",
+  "description": "> **Audience:** Developers, QA Engineers, Tech Leads &nbsp;|&nbsp; **Duration:** ~90 min &nbsp;|&nbsp; **Pre-requisites:** GitHub Copilot subscription, Node.js 18+, VS Code",
   "main": "index.js",
   "scripts": {
+    "start": "npx http-server . -p 8080 -c-1",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,6 +12,15 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@playwright/test": "^1.59.1"
-  }
+    "@playwright/test": "^1.59.1",
+    "wait-on": "^8.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CanarysPlayground/Trex-runner-Game.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CanarysPlayground/Trex-runner-Game/issues"
+  },
+  "homepage": "https://github.com/CanarysPlayground/Trex-runner-Game#readme"
 }

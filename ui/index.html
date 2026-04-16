@@ -85,6 +85,10 @@ canvas{
 #startBtn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(47,158,68,0.5)}
 #startBtn:active{transform:translateY(0)}
 #startBtn:disabled{background:#aaa;box-shadow:none;cursor:default}
+#difficulty-selector{margin-bottom:10px;display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+#difficulty-selector label{font-size:clamp(13px,2vw,15px);color:#1a4a6b;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px}
+#difficulty-selector input[type=radio]:disabled+*,#difficulty-selector label:has(input:disabled){opacity:0.45;cursor:default}
+#difficulty-display{font-size:clamp(12px,2vw,15px);color:#2f9e44;font-weight:700;letter-spacing:0.5px}
 @media(max-width:500px){
   #game-wrapper{padding:12px}
   #startBtn{padding:8px 24px}
@@ -100,8 +104,14 @@ canvas{
   <div id="hud">
     <span id="highscore" aria-label="high-score">High Score: 0</span>
     <span id="status" aria-label="game-status">Press Start to play</span>
+    <span id="difficulty-display" aria-label="difficulty-display">Medium</span>
   </div>
   <div id="controls">
+    <div id="difficulty-selector" aria-label="difficulty-selector">
+      <label><input type="radio" name="difficulty" value="easy" aria-label="difficulty-easy"> Easy</label>
+      <label><input type="radio" name="difficulty" value="medium" aria-label="difficulty-medium" checked> Medium</label>
+      <label><input type="radio" name="difficulty" value="hard" aria-label="difficulty-hard"> Hard</label>
+    </div>
     <button id="startBtn" aria-label="start-button">Start</button>
   </div>
 </div>
