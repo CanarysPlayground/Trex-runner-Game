@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T-Rex Runner</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  height:100%;
+  background:linear-gradient(180deg,#87ceeb 0%,#e0f4ff 100%);
+  font-family:'Segoe UI',sans-serif;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  padding:16px;
+}
+#game-wrapper{
+  width:100%;
+  max-width:900px;
+  background:rgba(255,255,255,0.15);
+  border-radius:16px;
+  padding:20px;
+  box-shadow:0 8px 32px rgba(0,80,160,0.18);
+  backdrop-filter:blur(2px);
+}
+h1{
+  font-size:clamp(1.2rem,3vw,1.8rem);
+  color:#1a4a6b;
+  margin-bottom:10px;
+  letter-spacing:1px;
+  text-shadow:0 1px 2px rgba(255,255,255,0.7);
+}
+#canvas-container{
+  width:100%;
+  position:relative;
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,0.18);
+}
+canvas{
+  display:block;
+  width:100%;
+  height:auto;
+  border-radius:12px;
+}
+#hud{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:10px;
+  padding:0 4px;
+  gap:8px;
+  flex-wrap:wrap;
+}
+#highscore{
+  font-size:clamp(12px,2vw,15px);
+  color:#1a4a6b;
+  font-weight:600;
+}
+#status{
+  font-size:clamp(12px,2vw,15px);
+  font-weight:bold;
+  color:#c0392b;
+  min-height:18px;
+  text-align:center;
+  flex:1;
+}
+#controls{margin-top:12px;text-align:center}
+#startBtn{
+  padding:10px 36px;
+  font-size:clamp(14px,2.5vw,16px);
+  font-weight:bold;
+  background:linear-gradient(135deg,#2f9e44,#40c057);
+  color:#fff;
+  border:none;
+  border-radius:30px;
+  cursor:pointer;
+  letter-spacing:0.8px;
+  box-shadow:0 4px 12px rgba(47,158,68,0.4);
+  transition:transform 0.1s,box-shadow 0.1s;
+}
+#startBtn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(47,158,68,0.5)}
+#startBtn:active{transform:translateY(0)}
+#startBtn:disabled{background:#aaa;box-shadow:none;cursor:default}
+@media(max-width:500px){
+  #game-wrapper{padding:12px}
+  #startBtn{padding:8px 24px}
+}
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+  <h1>🦕 T-Rex Runner</h1>
+  <div id="canvas-container">
+    <canvas id="game" aria-label="game-canvas" width="800" height="250"></canvas>
+  </div>
+  <div id="hud">
+    <span id="highscore" aria-label="high-score">High Score: 0</span>
+    <span id="status" aria-label="game-status">Press Start to play</span>
+  </div>
+  <div id="controls">
+    <button id="startBtn" aria-label="start-button">Start</button>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
