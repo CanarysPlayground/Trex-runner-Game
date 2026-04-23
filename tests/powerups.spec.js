@@ -4,6 +4,7 @@ const DINO_DRAW_X = 40;
 const DINO_DRAW_WIDTH = 44;
 const DINO_DRAW_HEIGHT = 44;
 const MIN_JUMP_HEIGHT_PIXELS = 8;
+const BASE_URL = process.env.UI_BASE_URL || 'http://127.0.0.1:8080';
 
 /**
  * @param {import('@playwright/test').Page} page
@@ -37,7 +38,7 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
 
-  await page.goto('http://127.0.0.1:8080');
+  await page.goto(BASE_URL);
   await installDinoTracker(page);
 
   await page.getByLabel('start-button').click();
@@ -81,6 +82,6 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
   expect(jumpMetrics.count).toBeGreaterThan(0);
   expect(jumpMetrics.maxY - jumpMetrics.minY).toBeGreaterThanOrEqual(MIN_JUMP_HEIGHT_PIXELS);
   expect(jumpMetrics.score).toBeGreaterThanOrEqual(0);
-  expect(jumpMetrics.url).toContain('127.0.0.1:8080');
+  expect(jumpMetrics.url).toContain(BASE_URL);
   expect(pageErrors).toEqual([]);
 });
