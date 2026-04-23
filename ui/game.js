@@ -23,6 +23,19 @@ let rafId = null;
 
 window.gameScore = 0;
 
+// ── Power-up constants ──────────────────────────────────────
+const SPEED_BOOST_DURATION_TICKS = 300; // ~5 s at 60 fps
+const MAX_OBS_SPEED = 14;
+
+// ── Power-up state ──────────────────────────────────────────
+let powerUp = { active: false, type: null, x: 0 };
+let activePowerUp = { type: null, expiresAtTick: null };
+let tempSpeedMultiplier = 1;
+let shieldActive = false;
+let shieldFlashTick = 0;
+window.activePowerUps = {};
+window.powerUpEntity = null;
+
 // ── Difficulty profiles ─────────────────────────────────────
 const DIFFICULTY_PROFILES = {
   easy:   { obsSpeed: 4, obsGapMin: 250, obsGapRange: 200, scoreMultiplier: 1, cloudSpeedScale: 0.6 },
@@ -111,6 +124,22 @@ startBtn.addEventListener('click', ()=>{
 // ── Helpers ─────────────────────────────────────────────────
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
 
+function updatePowerUpHUD(){
+  const el = document.getElementById('powerup-status');
+  if(!el) return;
+  if(activePowerUp.type === 'speedBoost'){
+    const remaining = Math.max(0, Math.ceil((activePowerUp.expiresAtTick - tick) / 60));
+    el.textContent = '⚡ Speed Boost: ' + remaining + 's';
+  } else if(activePowerUp.type === 'shield'){
+    el.textContent = '🛡 Shield: ACTIVE';
+  } else {
+    el.textContent = '';
+  }
+  window.activePowerUps = activePowerUp.type
+    ? { type: activePowerUp.type, expiresAtTick: activePowerUp.expiresAtTick }
+    : {};
+}
+
 // ── Draw sky gradient ────────────────────────────────────────
 function drawSky(){
   const grad = ctx.createLinearGradient(0,0,0,H);
@@ -191,6 +220,31 @@ function drawScene(tick, moving){
   if(obsX < W+10){
     ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
   }
+  // Power-up entity
+  if(powerUp.active){
+    ctx.fillStyle = powerUp.type === 'speedBoost' ? '#f59f00' : '#3bc9db';
+    ctx.fillRect(powerUp.x, GROUND-22, 22, 22);
+    ctx.font = '14px Segoe UI,sans-serif';
+    ctx.fillText(powerUp.type === 'speedBoost' ? '⚡' : '🛡', powerUp.x + 3, GROUND - 4);
+  }
+  // Speed boost glow around dino
+  if(activePowerUp.type === 'speedBoost'){
+    ctx.fillStyle = 'rgba(245,159,0,0.28)';
+    ctx.fillRect(36, dinoY-34, 52, 52);
+  }
+  // Shield absorption flash
+  if(tick > 0 && tick <= shieldFlashTick){
+    ctx.fillStyle = 'rgba(255,220,0,0.45)';
+    ctx.fillRect(30, dinoY-46, 68, 68);
+  }
+  // Shield bubble around dino
+  if(shieldActive){
+    ctx.strokeStyle = 'rgba(59,201,219,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(62, dinoY-10, 30, 32, 0, 0, Math.PI*2);
+    ctx.stroke();
+  }
   // Dino
   ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
   // Score
@@ -239,8 +293,17 @@ function startGame(){
   // Update HUD display
   const diffDisplay = document.getElementById('difficulty-display');
   if (diffDisplay) diffDisplay.textContent = window.selectedDifficulty.charAt(0).toUpperCase() + window.selectedDifficulty.slice(1);
+  // Reset power-ups
+  powerUp = { active: false, type: null, x: 0 };
+  activePowerUp = { type: null, expiresAtTick: null };
+  tempSpeedMultiplier = 1;
+  shieldActive = false;
+  shieldFlashTick = 0;
+  window.activePowerUps = {};
+  window.powerUpEntity = null;
   state='running';
   window.gameScore=0;
+  updatePowerUpHUD();
   startBtn.textContent='Restart';
   setStatus('Running — press Space to jump!');
   loop(0);
@@ -249,6 +312,13 @@ function startGame(){
 // ── Game over ────────────────────────────────────────────────
 function gameOver(){
   state='over';
+  powerUp.active = false;
+  activePowerUp = { type: null, expiresAtTick: null };
+  tempSpeedMultiplier = 1;
+  shieldActive = false;
+  window.activePowerUps = {};
+  window.powerUpEntity = null;
+  updatePowerUpHUD();
   startBtn.textContent='Restart';
   setStatus('Game Over! Score: '+score+' — click Restart to play again');
   // Re-enable difficulty selector
@@ -274,12 +344,53 @@ function loop(){
 
   // Cactus
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
-  obsX -= diffConfig.obsSpeed;
-  if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier; }
+  const effectiveObsSpeed = Math.min(diffConfig.obsSpeed * tempSpeedMultiplier, MAX_OBS_SPEED);
+  obsX -= effectiveObsSpeed;
+  if(obsX < -40){
+    obsX = W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange);
+    score += diffConfig.scoreMultiplier * (activePowerUp.type === 'speedBoost' ? 2 : 1);
+    // Spawn power-up (40% chance, only if none active or on-screen)
+    if(!powerUp.active && activePowerUp.type === null && Math.random() < 0.4){
+      powerUp = {
+        active: true,
+        type: Math.random() < 0.5 ? 'speedBoost' : 'shield',
+        x: W + 80 + Math.floor(Math.random()*120)
+      };
+    }
+  }
   window.gameScore = score;
 
+  // Power-up movement & collection
+  if(powerUp.active){
+    powerUp.x -= diffConfig.obsSpeed;
+    if(powerUp.x < -30){
+      powerUp.active = false;
+    } else if(activePowerUp.type === null &&
+              84 > powerUp.x && 40 < powerUp.x + 22 &&
+              dinoY + 12 > GROUND - 22 && dinoY - 32 < GROUND){
+      // Collected
+      powerUp.active = false;
+      activePowerUp.type = powerUp.type;
+      if(powerUp.type === 'speedBoost'){
+        activePowerUp.expiresAtTick = tick + SPEED_BOOST_DURATION_TICKS;
+        tempSpeedMultiplier = 1.5;
+      } else {
+        activePowerUp.expiresAtTick = null;
+        shieldActive = true;
+      }
+    }
+  }
+  window.powerUpEntity = powerUp.active ? { type: powerUp.type, x: powerUp.x } : null;
+
+  // Speed boost expiry
+  if(activePowerUp.type === 'speedBoost' && tick >= activePowerUp.expiresAtTick){
+    activePowerUp = { type: null, expiresAtTick: null };
+    tempSpeedMultiplier = 1;
+  }
+  updatePowerUpHUD();
+
   // Road stripes scroll
-  stripeOffset = (stripeOffset + diffConfig.obsSpeed) % 110;
+  stripeOffset = (stripeOffset + effectiveObsSpeed) % 110;
 
   // Clouds
   clouds.forEach(cl=>{
@@ -301,7 +412,18 @@ function loop(){
 
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
-    gameOver();
+    if(shieldActive){
+      // Shield absorbs the hit
+      shieldActive = false;
+      activePowerUp = { type: null, expiresAtTick: null };
+      shieldFlashTick = tick + 20;
+      updatePowerUpHUD();
+      // Push cactus past player to prevent repeated collision trigger
+      obsX = -41;
+      rafId = requestAnimationFrame(loop);
+    } else {
+      gameOver();
+    }
   } else {
     rafId = requestAnimationFrame(loop);
   }
