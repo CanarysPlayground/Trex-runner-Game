@@ -73,7 +73,7 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
       count: frames.length,
       minY: window.__dinoJumpMinY,
       maxY: window.__dinoJumpMaxY,
-      score: window.gameScore,
+      score: window.gameScore ?? 0,
       url: window.location.href,
     };
   });
