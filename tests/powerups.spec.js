@@ -79,7 +79,7 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
   });
 
   expect(jumpMetrics.count).toBeGreaterThan(0);
-  expect(jumpMetrics.minY).toBeLessThan(jumpMetrics.maxY - MIN_JUMP_HEIGHT_PIXELS);
+  expect(jumpMetrics.maxY - jumpMetrics.minY).toBeGreaterThanOrEqual(MIN_JUMP_HEIGHT_PIXELS);
   expect(jumpMetrics.score).toBeGreaterThanOrEqual(0);
   expect(jumpMetrics.url).toContain('127.0.0.1:8080');
   expect(pageErrors).toEqual([]);
