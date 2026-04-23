@@ -1,24 +1,34 @@
 const { test, expect } = require('@playwright/test');
 
+const DINO_DRAW_X = 40;
+const DINO_DRAW_WIDTH = 44;
+const DINO_DRAW_HEIGHT = 44;
+const MIN_JUMP_HEIGHT_PIXELS = 8;
+
 /**
  * @param {import('@playwright/test').Page} page
  */
 async function installDinoTracker(page) {
-  await page.evaluate(() => {
+  await page.evaluate(({ dinoX, dinoWidth, dinoHeight }) => {
     window.__dinoFrames = [];
 
     if (window.__dinoTrackerInstalled) return;
 
     const originalDrawImage = CanvasRenderingContext2D.prototype.drawImage;
     CanvasRenderingContext2D.prototype.drawImage = function patchedDrawImage(...args) {
-      if (args.length >= 5 && args[1] === 40 && args[3] === 44 && args[4] === 44) {
+      if (
+        args.length >= 5 &&
+        args[1] === dinoX &&
+        args[3] === dinoWidth &&
+        args[4] === dinoHeight
+      ) {
         window.__dinoFrames.push(args[2]);
       }
       return originalDrawImage.apply(this, args);
     };
 
     window.__dinoTrackerInstalled = true;
-  });
+  }, { dinoX: DINO_DRAW_X, dinoWidth: DINO_DRAW_WIDTH, dinoHeight: DINO_DRAW_HEIGHT });
 }
 
 test('dino jumps when Space is pressed while game is running', async ({ page }) => {
@@ -36,7 +46,13 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
   });
 
   await page.keyboard.press('Space');
-  await page.waitForTimeout(500);
+  await page.waitForFunction(
+    minJumpHeight => {
+      const frames = window.__dinoFrames;
+      return frames.length > 1 && Math.max(...frames) - Math.min(...frames) >= minJumpHeight;
+    },
+    MIN_JUMP_HEIGHT_PIXELS
+  );
 
   const jumpMetrics = await page.evaluate(() => {
     const frames = window.__dinoFrames;
@@ -50,7 +66,7 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
   });
 
   expect(jumpMetrics.count).toBeGreaterThan(0);
-  expect(jumpMetrics.minY).toBeLessThan(jumpMetrics.maxY - 8);
+  expect(jumpMetrics.minY).toBeLessThan(jumpMetrics.maxY - MIN_JUMP_HEIGHT_PIXELS);
   expect(jumpMetrics.score).toBeGreaterThanOrEqual(0);
   expect(jumpMetrics.url).toContain('127.0.0.1:8080');
   expect(pageErrors).toEqual([]);
