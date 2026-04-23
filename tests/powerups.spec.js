@@ -11,6 +11,8 @@ const MIN_JUMP_HEIGHT_PIXELS = 8;
 async function installDinoTracker(page) {
   await page.evaluate(({ dinoX, dinoWidth, dinoHeight }) => {
     window.__dinoFrames = [];
+    window.__dinoJumpMinY = null;
+    window.__dinoJumpMaxY = null;
 
     if (window.__dinoTrackerInstalled) return;
 
@@ -43,6 +45,8 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
 
   await page.evaluate(() => {
     window.__dinoFrames = [];
+    window.__dinoJumpMinY = null;
+    window.__dinoJumpMaxY = null;
   });
 
   await page.keyboard.press('Space');
@@ -56,6 +60,8 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
         if (frames[i] < minY) minY = frames[i];
         if (frames[i] > maxY) maxY = frames[i];
       }
+      window.__dinoJumpMinY = minY;
+      window.__dinoJumpMaxY = maxY;
       return maxY - minY >= minJumpHeight;
     },
     MIN_JUMP_HEIGHT_PIXELS
@@ -63,16 +69,10 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
 
   const jumpMetrics = await page.evaluate(() => {
     const frames = window.__dinoFrames;
-    let minY = frames[0];
-    let maxY = frames[0];
-    for (let i = 1; i < frames.length; i++) {
-      if (frames[i] < minY) minY = frames[i];
-      if (frames[i] > maxY) maxY = frames[i];
-    }
     return {
       count: frames.length,
-      minY,
-      maxY,
+      minY: window.__dinoJumpMinY,
+      maxY: window.__dinoJumpMaxY,
       score: window.gameScore,
       url: window.location.href,
     };
