@@ -49,17 +49,30 @@ test('dino jumps when Space is pressed while game is running', async ({ page }) 
   await page.waitForFunction(
     minJumpHeight => {
       const frames = window.__dinoFrames;
-      return frames.length > 1 && Math.max(...frames) - Math.min(...frames) >= minJumpHeight;
+      if (frames.length <= 1) return false;
+      let minY = frames[0];
+      let maxY = frames[0];
+      for (let i = 1; i < frames.length; i++) {
+        if (frames[i] < minY) minY = frames[i];
+        if (frames[i] > maxY) maxY = frames[i];
+      }
+      return maxY - minY >= minJumpHeight;
     },
     MIN_JUMP_HEIGHT_PIXELS
   );
 
   const jumpMetrics = await page.evaluate(() => {
     const frames = window.__dinoFrames;
+    let minY = frames[0];
+    let maxY = frames[0];
+    for (let i = 1; i < frames.length; i++) {
+      if (frames[i] < minY) minY = frames[i];
+      if (frames[i] > maxY) maxY = frames[i];
+    }
     return {
       count: frames.length,
-      minY: Math.min(...frames),
-      maxY: Math.max(...frames),
+      minY,
+      maxY,
       score: window.gameScore,
       url: window.location.href,
     };
