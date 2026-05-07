@@ -37,7 +37,13 @@ let powerUpOnScreen = null; // { type, x, y }
 let nextPowerUpScore = 5;   // spawn when score reaches this
 
 window.powerUp = { active: null, timeLeft: 0 };
-let powerUpTimer = 0;       // ticks remaining (60 ticks/s approx)
+let powerUpTimer = 0;       // ticks remaining (TARGET_FPS ticks/s)
+
+// ── Constants ────────────────────────────────────────────────
+const TARGET_FPS = 60;
+const DINO_X = 40, DINO_W = 44, DINO_H = 44;
+const POWERUP_COLLECT_X_MARGIN = 20;
+const POWERUP_COLLECT_Y_THRESHOLD = 30;
 
 // ── Clouds ──────────────────────────────────────────────────
 const clouds = [
@@ -243,7 +249,7 @@ function flashDino(framesLeft){
   ctx.save();
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = '#e03131';
-  ctx.fillRect(40, dinoY - 32, 44, 44);
+  ctx.fillRect(DINO_X, dinoY - DINO_H + 12, DINO_W, DINO_H);
   ctx.restore();
   rafId = requestAnimationFrame(()=> flashDino(framesLeft - 1));
 }
@@ -263,7 +269,7 @@ function drawScene(tick, moving){
   // Power-up aura around dino
   drawPowerUpAura();
   // Dino
-  ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
+  ctx.drawImage(dinoImg, DINO_X, dinoY - DINO_H + 12, DINO_W, DINO_H);
   // Score
   ctx.fillStyle='#1a4a6b';
   ctx.font='bold 15px Segoe UI,sans-serif';
@@ -363,12 +369,12 @@ function loop(){
   // Check power-up collection (dino AABB vs power-up circle)
   if(powerUpOnScreen){
     const pu = powerUpOnScreen;
-    const dinoLeft = 40, dinoRight = 84;
-    if(pu.x > dinoLeft - 20 && pu.x < dinoRight + 20 && dinoY > GROUND - 30){
+    const dinoLeft = DINO_X, dinoRight = DINO_X + DINO_W;
+    if(pu.x > dinoLeft - POWERUP_COLLECT_X_MARGIN && pu.x < dinoRight + POWERUP_COLLECT_X_MARGIN && dinoY > GROUND - POWERUP_COLLECT_Y_THRESHOLD){
       // Collected!
       window.powerUp.active = pu.type;
       window.powerUp.timeLeft = POWERUP_DURATION[pu.type];
-      powerUpTimer = POWERUP_DURATION[pu.type] * 60; // frames at ~60fps
+      powerUpTimer = POWERUP_DURATION[pu.type] * TARGET_FPS;
       powerUpOnScreen = null;
       setPowerUpStatus();
     }
@@ -382,9 +388,9 @@ function loop(){
       window.powerUp.timeLeft = 0;
       setPowerUpStatus();
     } else {
-      window.powerUp.timeLeft = Math.ceil(powerUpTimer / 60);
+      window.powerUp.timeLeft = Math.ceil(powerUpTimer / TARGET_FPS);
       // Update HUD every second
-      if(powerUpTimer % 60 === 0) setPowerUpStatus();
+      if(powerUpTimer % TARGET_FPS === 0) setPowerUpStatus();
     }
   }
 
