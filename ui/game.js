@@ -232,6 +232,22 @@ function drawPowerUpAura(){
   ctx.restore();
 }
 
+// ── Shield flash — briefly tints dino red (n frames) ─────────
+function flashDino(framesLeft){
+  if(state !== 'running' || framesLeft <= 0){
+    if(state === 'running') rafId = requestAnimationFrame(loop);
+    return;
+  }
+  drawScene(tick, false);
+  // Red overlay on dino
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = '#e03131';
+  ctx.fillRect(40, dinoY - 32, 44, 44);
+  ctx.restore();
+  rafId = requestAnimationFrame(()=> flashDino(framesLeft - 1));
+}
+
 
 function drawScene(tick, moving){
   drawSky();
@@ -396,18 +412,18 @@ function loop(){
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
     if(window.powerUp.active === 'shield'){
-      // Shield absorbs the hit
+      // Shield absorbs the hit — start a brief red-flash sequence
       window.powerUp.active = null;
       window.powerUp.timeLeft = 0;
       powerUpTimer = 0;
       setPowerUpStatus();
-      rafId = requestAnimationFrame(loop);
-    } else {
-      gameOver();
+      flashDino(3);
+      return; // flashDino continues the loop
     }
-  } else {
-    rafId = requestAnimationFrame(loop);
+    gameOver();
+    return;
   }
+  rafId = requestAnimationFrame(loop);
 }
 
 // ── Boot ─────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ Power-ups are collectible items that appear on the road during gameplay. The din
 
 - A power-up spawns after every **5 cacti** passed (score multiples of 5).
 - Only **one** power-up can be active on screen at a time.
-- Power-ups appear at `y = GROUND` (same ground level as the dino).
+- Power-ups appear at `y = GROUND - 20` (slightly above ground level).
 - Power-up type is selected randomly each spawn.
 - Power-ups move left at obstacle speed.
 - If a power-up exits left without being collected it is discarded; next spawn at the next multiple-of-5 score.
@@ -35,7 +35,7 @@ Power-ups are collectible items that appear on the road during gameplay. The din
 
 ## Collision / Collection
 
-- **Collection box (AABB):** power-up `x` range ±20 px, `y` range `GROUND-30` to `GROUND`.
+- **Collection box (AABB):** power-up `x` within ±20 px of dino right edge, `dinoY > GROUND - 30`.
 - On collection: activate the power-up effect, remove from screen, start countdown timer.
 - Only one power-up effect can be active at a time; collecting a new one replaces the old one.
 
@@ -59,7 +59,7 @@ Power-ups are collectible items that appear on the road during gameplay. The din
 ### Slow-Mo (`slow`)
 - Sets `window.powerUp.active = 'slow'`.
 - While active: obstacle X movement is `obsSpeed * 0.5` instead of `obsSpeed`.
-- Visual: a purple time-distortion ripple behind the dino.
+- Visual: a purple aura ring around the dino (shared aura style, coloured purple).
 
 ---
 
