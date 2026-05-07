@@ -20,8 +20,24 @@ const GRAVITY = 1.2, JUMP_V = -16;
 let obsX = W;
 let score = 0;
 let rafId = null;
+const OBS_SPEED = 6;
+let obsSpeed = OBS_SPEED;
 
 window.gameScore = 0;
+
+// ── Power-ups ────────────────────────────────────────────────
+// Types: 'shield' | 'boost' | 'slow'
+const POWERUP_TYPES = ['shield', 'boost', 'slow'];
+const POWERUP_COLORS = { shield: '#4dabf7', boost: '#ffd43b', slow: '#cc5de8' };
+const POWERUP_ICONS  = { shield: '🛡️', boost: '⚡', slow: '⏱️' };
+const POWERUP_LABELS = { shield: 'Shield', boost: 'Boost', slow: 'Slow-Mo' };
+const POWERUP_DURATION = { shield: 5, boost: 6, slow: 5 };
+
+let powerUpOnScreen = null; // { type, x, y }
+let nextPowerUpScore = 5;   // spawn when score reaches this
+
+window.powerUp = { active: null, timeLeft: 0 };
+let powerUpTimer = 0;       // ticks remaining (60 ticks/s approx)
 
 // ── Clouds ──────────────────────────────────────────────────
 const clouds = [
@@ -95,6 +111,17 @@ startBtn.addEventListener('click', ()=>{
 // ── Helpers ─────────────────────────────────────────────────
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
 
+const powerUpStatusEl = document.getElementById('powerup-status');
+function setPowerUpStatus(){
+  if(!powerUpStatusEl) return;
+  if(window.powerUp.active){
+    const t = window.powerUp.timeLeft;
+    powerUpStatusEl.textContent = POWERUP_ICONS[window.powerUp.active]+' '+POWERUP_LABELS[window.powerUp.active]+' '+t+'s';
+  } else {
+    powerUpStatusEl.textContent = '—';
+  }
+}
+
 // ── Draw sky gradient ────────────────────────────────────────
 function drawSky(){
   const grad = ctx.createLinearGradient(0,0,0,H);
@@ -165,16 +192,60 @@ function drawBirds(tick){
   });
 }
 
-// ── Full scene draw (static snapshot for idle/over) ──────────
+// ── Draw power-up on screen ───────────────────────────────────
+function drawPowerUp(){
+  if(!powerUpOnScreen) return;
+  const {type, x} = powerUpOnScreen;
+  const y = GROUND - 20;
+  const color = POWERUP_COLORS[type];
+  // Pulsing glow circle
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 14;
+  ctx.fillStyle   = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 16, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+  // Icon letter
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px Segoe UI,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(POWERUP_ICONS[type], x, y);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+// ── Draw active power-up aura on dino ────────────────────────
+function drawPowerUpAura(){
+  if(!window.powerUp.active) return;
+  const color = POWERUP_COLORS[window.powerUp.active];
+  const dinoMidX = 40 + 22, dinoMidY = dinoY - 10;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.arc(dinoMidX, dinoMidY, 28, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+
 function drawScene(tick, moving){
   drawSky();
   drawClouds();
   drawBirds(tick);
   drawGround(moving);
+  // Power-up on screen
+  drawPowerUp();
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
     ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
   }
+  // Power-up aura around dino
+  drawPowerUpAura();
   // Dino
   ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
   // Score
@@ -208,6 +279,13 @@ function startGame(){
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
   stripeOffset=0;
+  obsSpeed = OBS_SPEED;
+  // Reset power-ups
+  powerUpOnScreen = null;
+  nextPowerUpScore = 5;
+  window.powerUp = { active: null, timeLeft: 0 };
+  powerUpTimer = 0;
+  setPowerUpStatus();
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
   // Scatter birds off-screen so they fly in naturally
@@ -243,13 +321,59 @@ function loop(){
   dinoY  += dinoVY;
   if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
 
+  // Power-up effect: slow-mo adjusts obstacle speed
+  obsSpeed = (window.powerUp.active === 'slow') ? OBS_SPEED * 0.5 : OBS_SPEED;
+
   // Cactus
-  obsX -= 6;
-  if(obsX < -40){ obsX=W + Math.floor(Math.random()*200); score++; }
+  obsX -= obsSpeed;
+  if(obsX < -40){
+    obsX = W + Math.floor(Math.random()*200);
+    score += (window.powerUp.active === 'boost') ? 2 : 1;
+    // Spawn power-up when score milestone reached
+    if(score >= nextPowerUpScore && !powerUpOnScreen){
+      const type = POWERUP_TYPES[Math.floor(Math.random()*POWERUP_TYPES.length)];
+      powerUpOnScreen = { type, x: W + 80 };
+      nextPowerUpScore = score + 5;
+    }
+  }
   window.gameScore = score;
 
+  // Move power-up on screen
+  if(powerUpOnScreen){
+    powerUpOnScreen.x -= obsSpeed;
+    if(powerUpOnScreen.x < -30) powerUpOnScreen = null;
+  }
+
+  // Check power-up collection (dino AABB vs power-up circle)
+  if(powerUpOnScreen){
+    const pu = powerUpOnScreen;
+    const dinoLeft = 40, dinoRight = 84;
+    if(pu.x > dinoLeft - 20 && pu.x < dinoRight + 20 && dinoY > GROUND - 30){
+      // Collected!
+      window.powerUp.active = pu.type;
+      window.powerUp.timeLeft = POWERUP_DURATION[pu.type];
+      powerUpTimer = POWERUP_DURATION[pu.type] * 60; // frames at ~60fps
+      powerUpOnScreen = null;
+      setPowerUpStatus();
+    }
+  }
+
+  // Count down active power-up
+  if(window.powerUp.active){
+    powerUpTimer--;
+    if(powerUpTimer <= 0){
+      window.powerUp.active = null;
+      window.powerUp.timeLeft = 0;
+      setPowerUpStatus();
+    } else {
+      window.powerUp.timeLeft = Math.ceil(powerUpTimer / 60);
+      // Update HUD every second
+      if(powerUpTimer % 60 === 0) setPowerUpStatus();
+    }
+  }
+
   // Road stripes scroll
-  stripeOffset = (stripeOffset + 6) % 110;
+  stripeOffset = (stripeOffset + obsSpeed) % 110;
 
   // Clouds
   clouds.forEach(cl=>{
@@ -271,7 +395,16 @@ function loop(){
 
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
-    gameOver();
+    if(window.powerUp.active === 'shield'){
+      // Shield absorbs the hit
+      window.powerUp.active = null;
+      window.powerUp.timeLeft = 0;
+      powerUpTimer = 0;
+      setPowerUpStatus();
+      rafId = requestAnimationFrame(loop);
+    } else {
+      gameOver();
+    }
   } else {
     rafId = requestAnimationFrame(loop);
   }
