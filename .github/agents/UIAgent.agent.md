@@ -1,7 +1,9 @@
 ---
 name: UI Developer Agent
 description: Implements gameplay features such as bird obstacle inside game.js
-argument-hint: "Feature or bug to implement in UI"
+argument-hint: "Feature or bug to implement
+tools: [execute, read, edit,playwright]
+]
 ---
 
 # Role: UI Developer

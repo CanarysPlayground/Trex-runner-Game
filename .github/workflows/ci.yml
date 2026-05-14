@@ -110,6 +110,19 @@ jobs:
               process.exit(1);
             }
             console.log('PASS: All bird obstacle symbols present in game.js');
+
+            // 3. Power-up symbols required for bird interaction tests
+            const powerupRequired = [
+              'powerupActive', 'powerupType', 'powerupX', 'powerupSpawnCooldown',
+              'shieldTimer', 'scoreBoostActive', 'scoreBoostTimer',
+              'birdWasAbsorbed', 'birdHitCooldown',
+            ];
+            const missingPowerup = powerupRequired.filter(sym => !js.body.includes(sym));
+            if (missingPowerup.length > 0) {
+              console.error(`FAIL: game.js is missing power-up symbols: ${missingPowerup.join(', ')}`);
+              process.exit(1);
+            }
+            console.log('PASS: All power-up symbols present in game.js');
           })();
           EOF
 
@@ -124,7 +137,20 @@ jobs:
         if: success() || failure()   # run even if full suite step above failed
         run: |
           npx playwright test --project=chromium \
-            --grep "bird|Bird|shield|Shield" \
+            --grep "bird|Bird|shield|Shield|boost|Boost|dodge|powerup|power-up" \
+            --reporter=list \
+            --retries=1
+        env:
+          TREX_GAME_URL: http://localhost:8080/
+
+      # ── E2E tests — power-up × bird interactions (isolated) ───────────────
+      # Targets tests that verify power-up behaviour specifically against the
+      # bird obstacle: shield absorption, dodge bonus, and birdWasAbsorbed flag.
+      - name: Run Playwright tests — power-up × bird interactions
+        if: success() || failure()
+        run: |
+          npx playwright test --project=chromium \
+            --grep "shield.*bird|bird.*shield|dodge|birdWasAbsorbed|scoreBoost|power-up" \
             --reporter=list \
             --retries=1
         env:
