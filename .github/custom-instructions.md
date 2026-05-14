@@ -15,3 +15,7 @@
 ## Delivery
 - CI/CD must validate both existing and new functionality
 - Fail pipelines on test failures
+#architecture 
+- Modular design: Separate concerns (game logic, UI, testing)
+- Testable components: Ensure new features are easily testable
+

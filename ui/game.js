@@ -23,6 +23,13 @@ let rafId = null;
 
 window.gameScore = 0;
 
+// ── Power-Up Observable State (for tests) ────────────────────
+window.activePowerUps = {
+  shield: false,
+  scoreBoost: false,
+  scoreBoostTicksLeft: 0
+};
+
 // ── Difficulty profiles ─────────────────────────────────────
 const DIFFICULTY_PROFILES = {
   easy:   { obsSpeed: 4, obsGapMin: 250, obsGapRange: 200, scoreMultiplier: 1, cloudSpeedScale: 0.6 },
@@ -93,6 +100,105 @@ cactusImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
   <rect x="0" y="9" width="4" height="2" fill="#40c057"/>
   <rect x="26" y="17" width="4" height="2" fill="#40c057"/>
 </svg>`);
+
+// ── Power-Up Infrastructure ──────────────────────────────────
+// duration: null = event-bound (expires on trigger), number = tick-bound
+const POWERUP_DURATION_TICKS = { shield: null, scoreBoost: 300 };
+const POWERUP_SPAWN_MIN   = 450;
+const POWERUP_SPAWN_RANGE = 350;
+
+let spawnedPowerUps    = [];
+let powerUpSpawnTimer  = 0;
+let nextPowerUpSpawnAt = POWERUP_SPAWN_MIN + Math.floor(Math.random() * POWERUP_SPAWN_RANGE);
+
+function resetPowerUps() {
+  spawnedPowerUps = [];
+  powerUpSpawnTimer = 0;
+  nextPowerUpSpawnAt = POWERUP_SPAWN_MIN + Math.floor(Math.random() * POWERUP_SPAWN_RANGE);
+  window.activePowerUps.shield             = false;
+  window.activePowerUps.scoreBoost         = false;
+  window.activePowerUps.scoreBoostTicksLeft = 0;
+  updatePowerUpHUD();
+}
+
+function activatePowerUp(type) {
+  if (type === 'shield') {
+    window.activePowerUps.shield = true;
+  } else if (type === 'scoreBoost') {
+    window.activePowerUps.scoreBoost          = true;
+    window.activePowerUps.scoreBoostTicksLeft = POWERUP_DURATION_TICKS.scoreBoost;
+  }
+  updatePowerUpHUD();
+}
+
+function tickPowerUps(obsSpeed) {
+  // Spawn a collectible when timer threshold is reached
+  powerUpSpawnTimer++;
+  if (powerUpSpawnTimer >= nextPowerUpSpawnAt) {
+    const types = ['shield', 'scoreBoost'];
+    const type  = types[Math.floor(Math.random() * types.length)];
+    spawnedPowerUps.push({ type, x: W + 30, y: GROUND - 20 });
+    powerUpSpawnTimer  = 0;
+    nextPowerUpSpawnAt = POWERUP_SPAWN_MIN + Math.floor(Math.random() * POWERUP_SPAWN_RANGE);
+  }
+  // Move collectibles with the world
+  spawnedPowerUps = spawnedPowerUps.filter(p => { p.x -= obsSpeed; return p.x > -30; });
+  // Decrement time-bound active effects
+  if (window.activePowerUps.scoreBoost) {
+    window.activePowerUps.scoreBoostTicksLeft--;
+    if (window.activePowerUps.scoreBoostTicksLeft <= 0) {
+      window.activePowerUps.scoreBoost          = false;
+      window.activePowerUps.scoreBoostTicksLeft = 0;
+      updatePowerUpHUD();
+    }
+  }
+}
+
+function checkPowerUpCollisions() {
+  // Dino AABB: x 40-84, y (dinoY-32)–dinoY
+  const dx1 = 40, dx2 = 84, dy1 = dinoY - 32, dy2 = dinoY;
+  spawnedPowerUps = spawnedPowerUps.filter(p => {
+    const px1 = p.x - 14, px2 = p.x + 14, py1 = p.y - 14, py2 = p.y + 14;
+    if (dx2 > px1 && dx1 < px2 && dy2 > py1 && dy1 < py2) {
+      activatePowerUp(p.type);
+      return false; // remove collected item
+    }
+    return true;
+  });
+}
+
+function drawPowerUps() {
+  spawnedPowerUps.forEach(p => {
+    ctx.save();
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    if (p.type === 'shield') {
+      const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 14);
+      g.addColorStop(0, '#74c0fc'); g.addColorStop(1, '#1971c2');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('S', p.x, p.y);
+    } else {
+      const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 14);
+      g.addColorStop(0, '#ffe066'); g.addColorStop(1, '#e67700');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillText('2x', p.x, p.y);
+    }
+    ctx.restore();
+  });
+}
+
+function updatePowerUpHUD() {
+  const el = document.getElementById('powerup-status');
+  if (!el) return;
+  const parts = [];
+  if (window.activePowerUps.shield)     parts.push('🛡 Shield');
+  if (window.activePowerUps.scoreBoost) parts.push('⭐ 2x (' + window.activePowerUps.scoreBoostTicksLeft + ')');
+  el.textContent = parts.join('  ');
+}
 
 // ── API ─────────────────────────────────────────────────────
 fetch('http://localhost:3000/score')
@@ -191,8 +297,18 @@ function drawScene(tick, moving){
   if(obsX < W+10){
     ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
   }
+  // Power-up collectibles
+  drawPowerUps();
   // Dino
   ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
+  // Shield aura when active
+  if (window.activePowerUps.shield) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(116,192,252,0.85)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(62, dinoY - 16, 28, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
   // Score
   ctx.fillStyle='#1a4a6b';
   ctx.font='bold 15px Segoe UI,sans-serif';
@@ -225,6 +341,7 @@ function startGame(){
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
   stripeOffset=0;
+  resetPowerUps();
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
   // Scatter birds off-screen so they fly in naturally
@@ -275,7 +392,7 @@ function loop(){
   // Cactus
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   obsX -= diffConfig.obsSpeed;
-  if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier; }
+  if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier * (window.activePowerUps.scoreBoost ? 2 : 1); }
   window.gameScore = score;
 
   // Road stripes scroll
@@ -296,12 +413,24 @@ function loop(){
     b.y = Math.max(20, Math.min(85, b.y));
   });
 
+  // Power-ups: spawn, move, collect
+  tickPowerUps(diffConfig.obsSpeed);
+  checkPowerUpCollisions();
+
   // Draw everything
   drawScene(tick, true);
 
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
-    gameOver();
+    if (window.activePowerUps.shield) {
+      // Shield absorbs the collision (event-bound: one use)
+      window.activePowerUps.shield = false;
+      obsX = -40; // push cactus off-screen to prevent re-collision
+      updatePowerUpHUD();
+      rafId = requestAnimationFrame(loop);
+    } else {
+      gameOver();
+    }
   } else {
     rafId = requestAnimationFrame(loop);
   }
