@@ -21,6 +21,17 @@ let obsX = W;
 let score = 0;
 let rafId = null;
 
+// Bird obstacle
+const BIRD_W = 44, BIRD_H = 22;
+const BIRD_Y_LOW  = 160;  // threatens standing dino → player must jump
+const BIRD_Y_HIGH =  82;  // threatens dino near jump apex → timing challenge
+const BIRD_SPEED_BASE = 5;
+let birdX = -200;
+let birdY = BIRD_Y_LOW;
+let birdActive = false;
+let birdSpawnCooldown = 180;
+let shieldActive = false;
+
 window.gameScore = 0;
 
 // ── Difficulty profiles ─────────────────────────────────────
@@ -181,11 +192,37 @@ function drawBirds(tick){
   });
 }
 
+// ── Spawn obstacle bird ─────────────────────────────────────
+function spawnBird(){
+  birdY = Math.random() < 0.5 ? BIRD_Y_LOW : BIRD_Y_HIGH;
+  birdX = W + 80 + Math.floor(Math.random() * 200);
+  birdActive = true;
+}
+
+// ── Draw obstacle bird ───────────────────────────────────────
+// Renders an M-shape bird with sine-wave wing flap at (birdX, birdY).
+// Only executes when birdActive === true.
+function drawBird(tick){
+  if(!birdActive) return;
+  const flap = Math.sin(tick * 0.22) * 8;
+  ctx.strokeStyle = '#c0392b';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  // Left wing
+  ctx.moveTo(birdX,              birdY + flap);
+  ctx.quadraticCurveTo(birdX + BIRD_W * 0.25, birdY - flap, birdX + BIRD_W * 0.5, birdY);
+  // Right wing
+  ctx.quadraticCurveTo(birdX + BIRD_W * 0.75, birdY - flap, birdX + BIRD_W,       birdY + flap);
+  ctx.stroke();
+}
+
 // ── Full scene draw (static snapshot for idle/over) ──────────
 function drawScene(tick, moving){
   drawSky();
   drawClouds();
   drawBirds(tick);
+  drawBird(tick);
   drawGround(moving);
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
@@ -224,6 +261,7 @@ function startGame(){
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
+  birdX=-200; birdY=BIRD_Y_LOW; birdActive=false; birdSpawnCooldown=180; shieldActive=false;
   stripeOffset=0;
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
@@ -277,6 +315,10 @@ function loop(){
   obsX -= diffConfig.obsSpeed;
   if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier; }
   window.gameScore = score;
+  window.birdActive = birdActive;
+  window.birdX = birdX;
+  window.birdY = birdY;
+  window.shieldActive = shieldActive;
 
   // Road stripes scroll
   stripeOffset = (stripeOffset + diffConfig.obsSpeed) % 110;
@@ -287,7 +329,7 @@ function loop(){
     if(cl.x + 70 < 0) cl.x = W + 60;
   });
 
-  // Birds
+  // Decorative background birds
   birds.forEach(b=>{
     b.x -= b.speed;
     if(b.x < -20) b.x = W + Math.random()*300 + 100;
@@ -296,8 +338,28 @@ function loop(){
     b.y = Math.max(20, Math.min(85, b.y));
   });
 
+  // Obstacle bird — cooldown, spawn, move
+  birdSpawnCooldown--;
+  if(!birdActive && birdSpawnCooldown <= 0 && obsX > 300 && score >= 5){
+    spawnBird();
+    birdSpawnCooldown = 220 + Math.floor(Math.random() * 160);
+  }
+  if(birdActive){
+    birdX -= BIRD_SPEED_BASE;
+    if(birdX < -60) birdActive = false;
+  }
+
   // Draw everything
   drawScene(tick, true);
+
+  // Collision: AABB dino vs obstacle bird (checked before cactus)
+  // Dino occupies x:40–84, y:(dinoY-32)–(dinoY+12)
+  // Bird hitbox: x:birdX–(birdX+BIRD_W), y:(birdY-11)–(birdY+11)
+  if(birdActive && !shieldActive && birdX < 84 && birdX + BIRD_W > 40 &&
+     birdY > dinoY - 43 && birdY < dinoY + 23){
+    birdActive = false;
+    gameOver(); return;
+  }
 
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){

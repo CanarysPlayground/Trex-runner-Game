@@ -68,13 +68,79 @@ jobs:
       - name: Wait for servers
         run: npx wait-on http://localhost:8080 http://localhost:3000 --timeout 30000
 
-      # ── E2E tests ──────────────────────────────────────────────────────────
-      - name: Run Playwright tests
-        run: npx playwright test --project=chromium
+      # ── Server startup validation ──────────────────────────────────────────
+      # Verifies the game page loads and all bird obstacle globals are present
+      # in game.js. Fails fast before spending time on E2E if the JS is broken.
+      - name: Validate game loads and bird globals are present
+        run: |
+          node - <<'EOF'
+          const http = require('http');
+          function get(url) {
+            return new Promise((resolve, reject) => {
+              http.get(url, res => {
+                let body = '';
+                res.on('data', d => body += d);
+                res.on('end', () => resolve({ status: res.statusCode, body }));
+              }).on('error', reject);
+            });
+          }
+          (async () => {
+            // 1. Game UI must return HTTP 200
+            const ui = await get('http://localhost:8080/');
+            if (ui.status !== 200) {
+              console.error(`FAIL: UI server returned HTTP ${ui.status}`);
+              process.exit(1);
+            }
+            console.log('PASS: UI server returned HTTP 200');
 
+            // 2. game.js must be served and contain bird obstacle symbols
+            const js = await get('http://localhost:8080/ui/game.js');
+            if (js.status !== 200) {
+              console.error(`FAIL: game.js not served (HTTP ${js.status})`);
+              process.exit(1);
+            }
+            const required = [
+              'birdActive', 'birdX', 'birdY',
+              'BIRD_Y_LOW', 'BIRD_Y_HIGH', 'BIRD_W', 'BIRD_H',
+              'spawnBird', 'drawBird', 'shieldActive',
+            ];
+            const missing = required.filter(sym => !js.body.includes(sym));
+            if (missing.length > 0) {
+              console.error(`FAIL: game.js is missing bird obstacle symbols: ${missing.join(', ')}`);
+              process.exit(1);
+            }
+            console.log('PASS: All bird obstacle symbols present in game.js');
+          })();
+          EOF
+
+      # ── E2E tests — full suite ─────────────────────────────────────────────
+      - name: Run Playwright tests (full suite)
+        run: npx playwright test --project=chromium --reporter=list
+
+      # ── E2E tests — bird obstacle (isolated, labeled) ─────────────────────
+      # Runs only bird tests with verbose output so failures are clearly
+      # attributed to the bird feature in the Actions summary.
+      - name: Run Playwright tests — bird obstacle
+        if: success() || failure()   # run even if full suite step above failed
+        run: |
+          npx playwright test --project=chromium \
+            --grep "bird|Bird|shield|Shield" \
+            --reporter=list \
+            --retries=1
+        env:
+          TREX_GAME_URL: http://localhost:8080/
+
+      # ── Upload artifacts ───────────────────────────────────────────────────
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report/
+
+      - name: Upload Playwright traces (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
