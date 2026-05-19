@@ -20,20 +20,19 @@ const GROUND = 185;   // dino feet y when standing
 let dinoY = GROUND, dinoVY = 0;
 const GRAVITY = 1.2, JUMP_V = -16;
 
-// Cactus
-let obsX = W;
+// Cactus obstacle pooling
+const MAX_CACTUS = 2;
+const cacti = Array.from({length: MAX_CACTUS}, (_, i) => ({ x: W + i*400 }));
 let score = 0;
 let rafId = null;
 
-// Bird obstacle
+// Bird obstacle pooling
 const BIRD_W = 44, BIRD_H = 22;
-const BIRD_Y_LOW  = 160;  // threatens standing dino → player must jump
-const BIRD_Y_HIGH =  82;  // threatens dino near jump apex → timing challenge
+const BIRD_Y_LOW  = 160;
+const BIRD_Y_HIGH =  82;
 const BIRD_SPEED_BASE = 5;
-let birdX = -200;
-let birdY = BIRD_Y_LOW;
-let birdActive = false;
-let birdSpawnCooldown = 180;
+const MAX_BIRDS = 2;
+const birdObstacles = Array.from({length: MAX_BIRDS}, () => ({ x: -200, y: BIRD_Y_LOW, active: false, cooldown: 180, wasAbsorbed: false, hitCooldown: 0 }));
 let shieldActive = false;
 
 // ── Power-up constants ───────────────────────────────────────
@@ -216,11 +215,19 @@ function drawBirds(tick){
   });
 }
 
-// ── Spawn obstacle bird ─────────────────────────────────────
-function spawnBird(){
-  birdY = Math.random() < 0.5 ? BIRD_Y_LOW : BIRD_Y_HIGH;
-  birdX = W + 80 + Math.floor(Math.random() * 200);
-  birdActive = true;
+// ── Spawn obstacle bird (pooled) ───────────────────────────
+function spawnBirdPooled(){
+  for (const bird of birdObstacles) {
+    if (!bird.active && bird.cooldown <= 0) {
+      bird.y = Math.random() < 0.5 ? BIRD_Y_LOW : BIRD_Y_HIGH;
+      bird.x = W + 80 + Math.floor(Math.random() * 200);
+      bird.active = true;
+      bird.wasAbsorbed = false;
+      bird.hitCooldown = 0;
+      bird.cooldown = 220 + Math.floor(Math.random() * 160);
+      break;
+    }
+  }
 }
 
 // ── Spawn power-up token ─────────────────────────────────────
@@ -332,13 +339,28 @@ function drawScene(tick, moving){
   drawSky();
   drawClouds();
   drawBirds(tick);
-  drawBird(tick);
+  // Draw pooled birds
+  birdObstacles.forEach(bird => {
+    if (bird.active) {
+      const flap = Math.sin(tick * 0.22) * 8;
+      ctx.strokeStyle = '#c0392b';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(bird.x, bird.y + flap);
+      ctx.quadraticCurveTo(bird.x + BIRD_W * 0.25, bird.y - flap, bird.x + BIRD_W * 0.5, bird.y);
+      ctx.quadraticCurveTo(bird.x + BIRD_W * 0.75, bird.y - flap, bird.x + BIRD_W, bird.y + flap);
+      ctx.stroke();
+    }
+  });
   drawGround(moving);
   drawPowerup();
-  // Cactus (only draw if not off screen in idle)
-  if(obsX < W+10){
-    ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
-  }
+  // Draw pooled cacti
+  cacti.forEach(cac => {
+    if (cac.x < W+10) {
+      ctx.drawImage(cactusImg, cac.x, GROUND-50, 30, 55);
+    }
+  });
   // Dino
   ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
   // Score
@@ -372,10 +394,11 @@ function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   // Reset positions
-  dinoY=GROUND; dinoVY=0; score=0; obsX=W;
-  birdX=-200; birdY=BIRD_Y_LOW; birdActive=false; birdSpawnCooldown=180; shieldActive=false;
+  dinoY=GROUND; dinoVY=0; score=0;
+  cacti.forEach((cac, i) => { cac.x = W + i*400; });
+  birdObstacles.forEach(bird => { bird.x = -200; bird.y = BIRD_Y_LOW; bird.active = false; bird.cooldown = 180; bird.wasAbsorbed = false; bird.hitCooldown = 0; });
   powerupX=-200; powerupActive=false; powerupSpawnCooldown=300;
-  shieldTimer=0; scoreBoostActive=false; scoreBoostTimer=0; birdHitCooldown=0; birdWasAbsorbed=false;
+  shieldTimer=0; scoreBoostActive=false; scoreBoostTimer=0;
   slowMotionActive=false; slowMotionTimer=0;
   stripeOffset=0;
   // Scatter clouds to spread
@@ -425,23 +448,25 @@ function loop(){
   dinoY  += dinoVY;
   if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
 
-  // Cactus
+  // Cactus pooling logic
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   const effectiveObsSpeed = diffConfig.obsSpeed * (slowMotionActive ? 0.5 : 1);
-  obsX -= effectiveObsSpeed;
-  if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1); }
+  cacti.forEach(cac => {
+    cac.x -= effectiveObsSpeed;
+    if (cac.x < -40) {
+      // Find max x among cacti to space them
+      const maxX = Math.max(...cacti.map(c => c.x));
+      cac.x = maxX + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange);
+      score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1);
+    }
+  });
   window.gameScore = score;
-  window.birdActive = birdActive;
-  window.birdX = birdX;
-  window.birdY = birdY;
   window.shieldActive = shieldActive;
   window.powerupActive = powerupActive;
   window.powerupType = powerupType;
   window.scoreBoostActive = scoreBoostActive;
   window.shieldTimer = shieldTimer;
   window.scoreBoostTimer = scoreBoostTimer;
-  window.birdHitCooldown = birdHitCooldown;
-  window.birdWasAbsorbed = birdWasAbsorbed;
   window.slowMotionActive = slowMotionActive;
   window.slowMotionTimer = slowMotionTimer;
   window.effectiveObsSpeed = effectiveObsSpeed;
@@ -464,27 +489,30 @@ function loop(){
     b.y = Math.max(20, Math.min(85, b.y));
   });
 
-  // Obstacle bird — cooldown, spawn, move
-  birdSpawnCooldown--;
-  if(!birdActive && birdSpawnCooldown <= 0 && obsX > 300 && score >= 5){
-    spawnBird();
-    birdSpawnCooldown = 220 + Math.floor(Math.random() * 160);
-  }
-  if(birdActive){
-    birdX -= BIRD_SPEED_BASE * (slowMotionActive ? 0.5 : 1);
-    if(birdX < -60){
-      // Dodge bonus: only when shield did not absorb this bird
-      if(!birdWasAbsorbed) score += 10 * (scoreBoostActive ? 2 : 1);
-      birdWasAbsorbed = false;
-      birdActive = false;
+  // Obstacle birds (pooled)
+  birdObstacles.forEach(bird => {
+    if (!bird.active) {
+      bird.cooldown--;
+    } else {
+      bird.x -= BIRD_SPEED_BASE * (slowMotionActive ? 0.5 : 1);
+      if (bird.x < -60) {
+        if (!bird.wasAbsorbed) score += 10 * (scoreBoostActive ? 2 : 1);
+        bird.wasAbsorbed = false;
+        bird.active = false;
+        bird.cooldown = 220 + Math.floor(Math.random() * 160);
+      }
+      if (bird.hitCooldown > 0) bird.hitCooldown--;
     }
+  });
+  // Spawn new bird if possible
+  if (score >= 5 && cacti.every(cac => cac.x > 300)) {
+    spawnBirdPooled();
   }
 
   // Power-up timers
   if(shieldTimer > 0){ shieldTimer--; if(shieldTimer <= 0){ shieldActive=false; shieldTimer=0; } }
   if(scoreBoostTimer > 0){ scoreBoostTimer--; if(scoreBoostTimer <= 0){ scoreBoostActive=false; scoreBoostTimer=0; } }
   if(slowMotionTimer > 0){ slowMotionTimer--; if(slowMotionTimer <= 0){ slowMotionActive=false; slowMotionTimer=0; } }
-  if(birdHitCooldown > 0) birdHitCooldown--;
 
   // Power-up token — spawn, move, collect
   powerupSpawnCooldown--;
@@ -515,28 +543,30 @@ function loop(){
   // Draw everything
   drawScene(tick, true);
 
-  // Collision: AABB dino vs obstacle bird (checked before cactus)
+  // Collision: AABB dino vs obstacle birds (pooled)
   // Dino occupies x:40–84, y:(dinoY-32)–(dinoY+12)
-  // Bird hitbox: x:birdX–(birdX+BIRD_W), y:(birdY-11)–(birdY+11)
-  if(birdActive && birdHitCooldown <= 0 && birdX < 84 && birdX + BIRD_W > 40 &&
-     birdY > dinoY - 43 && birdY < dinoY + 23){
-    if(shieldActive){
-      // Shield absorbs the hit — bird passes through, no game-over
-      shieldActive = false; shieldTimer = 0;
-      birdHitCooldown = 30;
-      birdWasAbsorbed = true;
-    } else {
-      birdActive = false;
-      gameOver(); return;
+  // Bird hitbox: x:bird.x–(bird.x+BIRD_W), y:(bird.y-11)–(bird.y+11)
+  for (const bird of birdObstacles) {
+    if (bird.active && bird.hitCooldown <= 0 && bird.x < 84 && bird.x + BIRD_W > 40 &&
+        bird.y > dinoY - 43 && bird.y < dinoY + 23) {
+      if (shieldActive) {
+        shieldActive = false; shieldTimer = 0;
+        bird.hitCooldown = 30;
+        bird.wasAbsorbed = true;
+      } else {
+        bird.active = false;
+        gameOver(); return;
+      }
     }
   }
 
-  // Collision check (AABB dino vs cactus)
-  if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
-    gameOver();
-  } else {
-    rafId = requestAnimationFrame(loop);
+  // Collision check (AABB dino vs cacti)
+  for (const cac of cacti) {
+    if (cac.x < 84 && cac.x > 46 && dinoY > GROUND-28) {
+      gameOver(); return;
+    }
   }
+  rafId = requestAnimationFrame(loop);
 }
 
 // ── Boot ─────────────────────────────────────────────────────
