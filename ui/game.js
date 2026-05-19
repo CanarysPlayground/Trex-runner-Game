@@ -15,6 +15,7 @@ const startBtn    = document.getElementById('startBtn');
 // 'idle' | 'running' | 'over'
 let state = 'idle';
 
+
 // Dino physics
 const GROUND = 185;   // dino feet y when standing
 let dinoY = GROUND, dinoVY = 0;
