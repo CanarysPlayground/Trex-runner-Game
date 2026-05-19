@@ -37,7 +37,7 @@ const POWERUP_W = 24, POWERUP_H = 24;
 const POWERUP_Y = GROUND - 10;   // token center sits just above road (y=175)
 const SHIELD_DURATION     = 300;  // frames (~5 s at 60 fps)
 const BOOST_DURATION      = 480;  // frames (~8 s at 60 fps)
-const SLOWMOTION_DURATION = 360;  // frames (~6 s at 60 fps)
+const SLOWMOTION_DURATION = 300;  // frames (5 s at 60 fps)
 
 // ── Power-up state ───────────────────────────────────────────
 let powerupType          = 'shield';  // 'shield' | 'scoreBoost' | 'slowMotion'
@@ -61,6 +61,8 @@ const DIFFICULTY_PROFILES = {
   hard:   { obsSpeed: 9, obsGapMin: 0,   obsGapRange: 100, scoreMultiplier: 2, cloudSpeedScale: 1.4 },
 };
 window.selectedDifficulty = 'medium';
+// Cached difficulty config — set once at startGame(), never changes mid-run
+let _diffConfig = DIFFICULTY_PROFILES.medium;
 
 document.querySelectorAll('input[name="difficulty"]').forEach(r => {
   r.addEventListener('change', e => {
@@ -143,12 +145,17 @@ startBtn.addEventListener('click', ()=>{
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
 
 // ── Draw sky gradient ────────────────────────────────────────
+// Gradient is static — create once, reuse every frame to avoid
+// the cost of createLinearGradient (~60 allocations/sec avoided)
+let _skyGrad = null;
 function drawSky(){
-  const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#5ba3d9');
-  grad.addColorStop(0.55,'#acd8f0');
-  grad.addColorStop(1,'#d4ecfb');
-  ctx.fillStyle = grad;
+  if(!_skyGrad){
+    _skyGrad = ctx.createLinearGradient(0,0,0,H);
+    _skyGrad.addColorStop(0,'#5ba3d9');
+    _skyGrad.addColorStop(0.55,'#acd8f0');
+    _skyGrad.addColorStop(1,'#d4ecfb');
+  }
+  ctx.fillStyle = _skyGrad;
   ctx.fillRect(0,0,W,H);
 }
 
@@ -223,7 +230,10 @@ function spawnBird(){
 function spawnPowerup(){
   if(obsX < 350) return;  // cactus gap guard — don't overlap with nearby cactus
   const r = Math.random();
-  powerupType   = r < 0.34 ? 'shield' : r < 0.67 ? 'scoreBoost' : 'slowMotion';
+  // 1/3 chance for each power-up
+  if(r < 0.33) powerupType = 'shield';
+  else if(r < 0.66) powerupType = 'scoreBoost';
+  else powerupType = 'slowMotion';
   powerupX      = W + 60 + Math.floor(Math.random() * 150);
   powerupActive = true;
 }
@@ -269,6 +279,7 @@ function drawPowerup(){
   ctx.font         = 'bold 13px Segoe UI,sans-serif';
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
+  // S = Shield, SL = SlowMotion, B = Boost
   ctx.fillText(powerupType === 'shield' ? 'S' : powerupType === 'slowMotion' ? 'SL' : 'B', powerupX + POWERUP_W * 0.5, POWERUP_Y);
   ctx.restore();
 }
@@ -367,6 +378,7 @@ function drawIdle(){
 function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
+  _diffConfig = diffConfig; // cache — difficulty selector is disabled during play
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
   birdX=-200; birdY=BIRD_Y_LOW; birdActive=false; birdSpawnCooldown=180; shieldActive=false;
@@ -390,6 +402,11 @@ function startGame(){
   if (diffDisplay) diffDisplay.textContent = window.selectedDifficulty.charAt(0).toUpperCase() + window.selectedDifficulty.slice(1);
   state='running';
   window.gameScore=0;
+  // Expose static-per-run values once here instead of every frame
+  window.powerupType = powerupType;
+  window.powerupActive = powerupActive;
+  window.birdWasAbsorbed = birdWasAbsorbed;
+  window.effectiveObsSpeed = diffConfig.obsSpeed;
   startBtn.textContent='Restart';
   setStatus('Running — press Space to jump!');
   loop(0);
@@ -422,25 +439,22 @@ function loop(){
   if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
 
   // Cactus
-  const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
+  const diffConfig = _diffConfig; // use config cached at startGame — avoids per-frame global lookup
   const effectiveObsSpeed = diffConfig.obsSpeed * (slowMotionActive ? 0.5 : 1);
   obsX -= effectiveObsSpeed;
   if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1); }
+  // Expose only genuinely dynamic values each tick; static-per-run values set once in startGame
   window.gameScore = score;
   window.birdActive = birdActive;
   window.birdX = birdX;
   window.birdY = birdY;
   window.shieldActive = shieldActive;
-  window.powerupActive = powerupActive;
-  window.powerupType = powerupType;
-  window.scoreBoostActive = scoreBoostActive;
   window.shieldTimer = shieldTimer;
+  window.scoreBoostActive = scoreBoostActive;
   window.scoreBoostTimer = scoreBoostTimer;
-  window.birdHitCooldown = birdHitCooldown;
-  window.birdWasAbsorbed = birdWasAbsorbed;
   window.slowMotionActive = slowMotionActive;
   window.slowMotionTimer = slowMotionTimer;
-  window.effectiveObsSpeed = effectiveObsSpeed;
+  window.birdHitCooldown = birdHitCooldown;
 
   // Road stripes scroll
   stripeOffset = (stripeOffset + effectiveObsSpeed) % 110;
@@ -461,10 +475,15 @@ function loop(){
   });
 
   // Obstacle bird — cooldown, spawn, move
-  birdSpawnCooldown--;
-  if(!birdActive && birdSpawnCooldown <= 0 && obsX > 300 && score >= 5){
-    spawnBird();
-    birdSpawnCooldown = 220 + Math.floor(Math.random() * 160);
+  // Only decrement and check spawn conditions while no bird is in play;
+  // avoids wasted counter arithmetic and extra condition checks every frame
+  if(!birdActive){
+    if(birdSpawnCooldown > 0){
+      birdSpawnCooldown--;
+    } else if(obsX > 300 && score >= 5){
+      spawnBird();
+      birdSpawnCooldown = 220 + Math.floor(Math.random() * 160);
+    }
   }
   if(birdActive){
     birdX -= BIRD_SPEED_BASE * (slowMotionActive ? 0.5 : 1);
