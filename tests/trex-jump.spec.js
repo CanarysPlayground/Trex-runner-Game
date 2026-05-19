@@ -230,7 +230,7 @@ test('Power-up token spawns on ground after score threshold', async ({ page }) =
   await page.waitForFunction(() => window.powerupActive === true, { timeout: 3000 });
 
   const type = await page.evaluate(() => window.powerupType);
-  expect(['shield', 'scoreBoost']).toContain(type);
+  expect(['shield', 'scoreBoost', 'slowMotion']).toContain(type);
 });
 
 test('Collecting shield token activates shield with timer', async ({ page }) => {
@@ -466,7 +466,7 @@ test('Shield token spawns after score >= 3 and cooldown expires', async ({ page 
 
   expect(await page.evaluate(() => window.powerupActive)).toBe(true);
   const type = await page.evaluate(() => window.powerupType);
-  expect(['shield', 'scoreBoost']).toContain(type);
+  expect(['shield', 'scoreBoost', 'slowMotion']).toContain(type);
 });
 
 test('Dino collects shield token — shieldActive becomes true', async ({ page }) => {
@@ -796,7 +796,8 @@ test('SlowMotion halves bird movement speed', async ({ page }) => {
     birdY            = BIRD_Y_LOW;
     obsX             = 600;
   });
-  const startX = await page.evaluate(() => window.birdX);
+  // Read birdX directly from the local var (avoids stale window.birdX before first export)
+  const startX = await page.evaluate(() => birdX);
   await page.waitForFunction(x => window.birdX <= x - 50, startX, { timeout: 3000 });
   const normalTravel = startX - await page.evaluate(() => window.birdX);
 

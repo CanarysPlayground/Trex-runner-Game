@@ -1,0 +1,9 @@
+{
+	"hooks": {
+		"name": "generate-commit-message",
+"trigger": "onDemand",
+"description": "Generate commit message and PR description",
+"prompt": "Generate a concise commit message and PR description with testing steps for the current changes."
+
+	}
+}

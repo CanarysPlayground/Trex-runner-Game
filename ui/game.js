@@ -1,3 +1,7 @@
+
+AWS_ACCESS_KEY_ID=AKIA1234567890ABCD
+AWS_SECRET_ACCESS_KEY=abcd1234abcd1234abcd1234abcd1234abcd1234
+
 const c = document.getElementById('game');
 const ctx = c.getContext('2d');
 const W = 800, H = 250;  // logical canvas size
@@ -136,7 +140,7 @@ document.addEventListener('keydown', ()=>{
   if(state==='running' && dinoY>=GROUND) dinoVY=JUMP_V;
 });
 startBtn.addEventListener('click', ()=>{
-  if(state==='idle'||state==='over') startGame();
+  if(state==='idle'||state==='over'||state==='running') startGame();
 });
 
 // ── Helpers ─────────────────────────────────────────────────
