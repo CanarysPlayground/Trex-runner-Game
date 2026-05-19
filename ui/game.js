@@ -10,6 +10,7 @@ const BIRD_MIN_Y = 20;
 const BIRD_MAX_Y = 85;
 const BIRD_DRIFT_AMPLITUDE = 3;
 const BIRD_PHASE_WRAP = Math.PI * 50;
+const BIRD_OSCILLATION_SPEED = 0.04;
 
 const highScoreEl = document.getElementById('highscore');
 const statusEl    = document.getElementById('status');
@@ -223,7 +224,7 @@ function startGame(){
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0;
   tick = 0;
-  lastFrameTs = 0;
+  lastFrameTs = performance.now();
   nextObsGap = 0;
   resetObstacle(0);
   stripeOffset=0;
@@ -237,7 +238,7 @@ function startGame(){
   window.gameScore=0;
   startBtn.textContent='Restart';
   setStatus('Running — press Space to jump!');
-  loop(0);
+  loop(lastFrameTs);
 }
 
 // ── Game over ────────────────────────────────────────────────
@@ -286,10 +287,10 @@ function loop(ts){
     b.x -= b.speed * delta;
     if(b.x < -20) b.x = W + Math.random()*300 + 100;
     // Gentle up/down drift
-    const phase = (tick % BIRD_PHASE_WRAP) * 0.04 + b.flapT;
+    const phase = (tick % BIRD_PHASE_WRAP) * BIRD_OSCILLATION_SPEED + b.flapT;
     const drift = Math.sin(phase) * BIRD_DRIFT_AMPLITUDE;
-    const clampedDrift = Math.min(BIRD_MAX_Y - b.baseY, Math.max(BIRD_MIN_Y - b.baseY, drift));
-    b.y = b.baseY + clampedDrift;
+    const boundedDrift = Math.min(BIRD_MAX_Y - b.baseY, Math.max(BIRD_MIN_Y - b.baseY, drift));
+    b.y = b.baseY + boundedDrift;
   });
 
   // Draw everything
