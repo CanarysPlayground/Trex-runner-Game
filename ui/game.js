@@ -9,6 +9,7 @@ const OBS_GAP_RANGE = 240;
 const BIRD_MIN_Y = 20;
 const BIRD_MAX_Y = 85;
 const BIRD_DRIFT_AMPLITUDE = 3;
+const BIRD_PHASE_WRAP = Math.PI * 50;
 
 const highScoreEl = document.getElementById('highscore');
 const statusEl    = document.getElementById('status');
@@ -285,8 +286,9 @@ function loop(ts){
     b.x -= b.speed * delta;
     if(b.x < -20) b.x = W + Math.random()*300 + 100;
     // Gentle up/down drift
-    const drift = Math.sin(tick*0.04 + b.flapT) * BIRD_DRIFT_AMPLITUDE;
-    const clampedDrift = Math.max(BIRD_MIN_Y - b.baseY, Math.min(BIRD_MAX_Y - b.baseY, drift));
+    const phase = (tick % BIRD_PHASE_WRAP) * 0.04 + b.flapT;
+    const drift = Math.sin(phase) * BIRD_DRIFT_AMPLITUDE;
+    const clampedDrift = Math.min(BIRD_MAX_Y - b.baseY, Math.max(BIRD_MIN_Y - b.baseY, drift));
     b.y = b.baseY + clampedDrift;
   });
 
