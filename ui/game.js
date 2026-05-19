@@ -2,6 +2,10 @@ const c = document.getElementById('game');
 const ctx = c.getContext('2d');
 const W = 800, H = 250;  // logical canvas size
 c.width = W; c.height = H;
+const FRAME_MS = 1000 / 60;
+const BASE_SCROLL_SPEED = 6;
+const MIN_OBS_GAP = 140;
+const OBS_GAP_RANGE = 240;
 
 const highScoreEl = document.getElementById('highscore');
 const statusEl    = document.getElementById('status');
@@ -18,6 +22,7 @@ const GRAVITY = 1.2, JUMP_V = -16;
 
 // Cactus
 let obsX = W;
+let nextObsGap = 220;
 let score = 0;
 let rafId = null;
 
@@ -96,12 +101,13 @@ startBtn.addEventListener('click', ()=>{
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
 
 // ── Draw sky gradient ────────────────────────────────────────
+const skyGradient = ctx.createLinearGradient(0,0,0,H);
+skyGradient.addColorStop(0,'#5ba3d9');
+skyGradient.addColorStop(0.55,'#acd8f0');
+skyGradient.addColorStop(1,'#d4ecfb');
+
 function drawSky(){
-  const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#5ba3d9');
-  grad.addColorStop(0.55,'#acd8f0');
-  grad.addColorStop(1,'#d4ecfb');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = skyGradient;
   ctx.fillRect(0,0,W,H);
 }
 
@@ -203,10 +209,19 @@ function drawIdle(){
 }
 
 // ── Start game ───────────────────────────────────────────────
+function resetObstacle(){
+  obsX = W + nextObsGap;
+  nextObsGap = MIN_OBS_GAP + Math.floor(Math.random() * OBS_GAP_RANGE);
+}
+
 function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
   // Reset positions
-  dinoY=GROUND; dinoVY=0; score=0; obsX=W;
+  dinoY=GROUND; dinoVY=0; score=0;
+  nextObsGap = 220;
+  obsX = W;
+  tick = 0;
+  lastFrameTs = 0;
   stripeOffset=0;
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
@@ -234,35 +249,38 @@ function gameOver(){
 
 // ── Main game loop ───────────────────────────────────────────
 let tick = 0;
-function loop(){
+let lastFrameTs = 0;
+function loop(ts){
   if(state!=='running') return;
-  tick++;
+  const delta = lastFrameTs ? Math.min(2, (ts - lastFrameTs) / FRAME_MS) : 1;
+  lastFrameTs = ts;
+  tick += delta;
 
   // Physics
-  dinoVY += GRAVITY;
-  dinoY  += dinoVY;
+  dinoVY += GRAVITY * delta;
+  dinoY  += dinoVY * delta;
   if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
 
   // Cactus
-  obsX -= 6;
-  if(obsX < -40){ obsX=W + Math.floor(Math.random()*200); score++; }
+  obsX -= BASE_SCROLL_SPEED * delta;
+  if(obsX < -40){ resetObstacle(); score++; }
   window.gameScore = score;
 
   // Road stripes scroll
-  stripeOffset = (stripeOffset + 6) % 110;
+  stripeOffset = (stripeOffset + BASE_SCROLL_SPEED * delta) % 110;
 
   // Clouds
   clouds.forEach(cl=>{
-    cl.x -= cl.speed;
+    cl.x -= cl.speed * delta;
     if(cl.x + 70 < 0) cl.x = W + 60;
   });
 
   // Birds
   birds.forEach(b=>{
-    b.x -= b.speed;
+    b.x -= b.speed * delta;
     if(b.x < -20) b.x = W + Math.random()*300 + 100;
     // Gentle up/down drift
-    b.y += Math.sin(tick*0.04 + b.flapT)*0.3;
+    b.y += Math.sin(tick*0.04 + b.flapT) * (0.3 * delta);
     b.y = Math.max(20, Math.min(85, b.y));
   });
 
