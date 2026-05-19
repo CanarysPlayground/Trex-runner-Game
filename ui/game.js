@@ -3,6 +3,7 @@ const ctx = c.getContext('2d');
 const W = 800, H = 250;  // logical canvas size
 c.width = W; c.height = H;
 const FRAME_MS = 1000 / 60;
+const MAX_DELTA_MULTIPLIER = 2;
 const BASE_SCROLL_SPEED = 6;
 const MIN_OBS_GAP = 140;
 const OBS_GAP_RANGE = 240;
@@ -209,8 +210,8 @@ function drawIdle(){
 }
 
 // ── Start game ───────────────────────────────────────────────
-function resetObstacle(){
-  obsX = W + nextObsGap;
+function resetObstacle(spawnOffset = nextObsGap){
+  obsX = W + spawnOffset;
   nextObsGap = MIN_OBS_GAP + Math.floor(Math.random() * OBS_GAP_RANGE);
 }
 
@@ -218,8 +219,8 @@ function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0;
-  nextObsGap = 220;
-  obsX = W;
+  nextObsGap = 0;
+  resetObstacle(0);
   tick = 0;
   lastFrameTs = 0;
   stripeOffset=0;
@@ -252,7 +253,7 @@ let tick = 0;
 let lastFrameTs = 0;
 function loop(ts){
   if(state!=='running') return;
-  const delta = lastFrameTs ? Math.min(2, (ts - lastFrameTs) / FRAME_MS) : 1;
+  const delta = lastFrameTs ? Math.min(MAX_DELTA_MULTIPLIER, (ts - lastFrameTs) / FRAME_MS) : 1;
   lastFrameTs = ts;
   tick += delta;
 
