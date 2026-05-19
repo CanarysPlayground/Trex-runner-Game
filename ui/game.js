@@ -6,6 +6,9 @@ const FRAME_MS = 1000 / 60;
 const BASE_SCROLL_SPEED = 6;
 const MIN_OBS_GAP = 140;
 const OBS_GAP_RANGE = 240;
+const BIRD_MIN_Y = 20;
+const BIRD_MAX_Y = 85;
+const BIRD_DRIFT_AMPLITUDE = 3;
 
 const highScoreEl = document.getElementById('highscore');
 const statusEl    = document.getElementById('status');
@@ -282,8 +285,9 @@ function loop(ts){
     b.x -= b.speed * delta;
     if(b.x < -20) b.x = W + Math.random()*300 + 100;
     // Gentle up/down drift
-    b.y = b.baseY + Math.sin(tick*0.04 + b.flapT) * 6;
-    b.y = Math.max(20, Math.min(85, b.y));
+    const drift = Math.sin(tick*0.04 + b.flapT) * BIRD_DRIFT_AMPLITUDE;
+    const clampedDrift = Math.max(BIRD_MIN_Y - b.baseY, Math.min(BIRD_MAX_Y - b.baseY, drift));
+    b.y = b.baseY + clampedDrift;
   });
 
   // Draw everything
