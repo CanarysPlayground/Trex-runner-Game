@@ -23,6 +23,7 @@ let obsX = W;
 const CACTUS_W = 30;
 const GROUPED_CACTUS_SPACING = 35;
 const GROUPED_CACTUS_SPAWN_PROB = 0.4;
+const CACTUS_OFFSCREEN_THRESHOLD = -40;
 let isGroupedCactus = false;
 let groupedCactiCount = 1;
 let score = 0;
@@ -279,7 +280,7 @@ function loop(){
   obsX -= 6;
   const lastCactusIndex = groupedCactiCount - 1;
   const lastCactusX = obsX + (lastCactusIndex * GROUPED_CACTUS_SPACING);
-  if(lastCactusX < -40){
+  if(lastCactusX < CACTUS_OFFSCREEN_THRESHOLD){
     spawnCactus();
     score++;
   }
@@ -311,7 +312,7 @@ function loop(){
   if(dinoY > GROUND-28){
     for(let i=0; i < groupedCactiCount; i++){
       const cactusX = obsX + (i * GROUPED_CACTUS_SPACING);
-      if(cactusX < DINO_HITBOX_RIGHT && cactusX > DINO_HITBOX_LEFT){
+      if(cactusX < DINO_HITBOX_RIGHT && (cactusX + CACTUS_W) > DINO_HITBOX_LEFT){
         cactusHit = true;
         break;
       }
