@@ -2,6 +2,15 @@ const c = document.getElementById('game');
 const ctx = c.getContext('2d');
 const W = 800, H = 250;  // logical canvas size
 c.width = W; c.height = H;
+const FRAME_MS = 1000 / 60;
+const BASE_SCROLL_SPEED = 6;
+const MIN_OBS_GAP = 140;
+const OBS_GAP_RANGE = 240;
+const BIRD_MIN_Y = 20;
+const BIRD_MAX_Y = 85;
+const BIRD_DRIFT_AMPLITUDE = 3;
+const BIRD_PHASE_WRAP = Math.PI * 50;
+const BIRD_OSCILLATION_SPEED = 0.04;
 
 const highScoreEl = document.getElementById('highscore');
 const statusEl    = document.getElementById('status');
@@ -18,6 +27,7 @@ const GRAVITY = 1.2, JUMP_V = -16;
 
 // Cactus
 let obsX = W;
+let nextObsGap = 220;
 let score = 0;
 let rafId = null;
 
@@ -33,9 +43,9 @@ const clouds = [
 
 // ── Birds ───────────────────────────────────────────────────
 const birds = [
-  {x:900, y:55,  speed:2.2, wing:0, flapT:0},
-  {x:1100,y:38,  speed:1.8, wing:0, flapT:10},
-  {x:1350,y:70,  speed:2.5, wing:0, flapT:5},
+  {x:900, y:55,  baseY:55, speed:2.2, wing:0, flapT:0},
+  {x:1100,y:38,  baseY:38, speed:1.8, wing:0, flapT:10},
+  {x:1350,y:70,  baseY:70, speed:2.5, wing:0, flapT:5},
 ];
 
 // ── Road stripes ────────────────────────────────────────────
@@ -96,12 +106,13 @@ startBtn.addEventListener('click', ()=>{
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
 
 // ── Draw sky gradient ────────────────────────────────────────
+const skyGradient = ctx.createLinearGradient(0,0,0,H);
+skyGradient.addColorStop(0,'#5ba3d9');
+skyGradient.addColorStop(0.55,'#acd8f0');
+skyGradient.addColorStop(1,'#d4ecfb');
+
 function drawSky(){
-  const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#5ba3d9');
-  grad.addColorStop(0.55,'#acd8f0');
-  grad.addColorStop(1,'#d4ecfb');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = skyGradient;
   ctx.fillRect(0,0,W,H);
 }
 
@@ -203,20 +214,31 @@ function drawIdle(){
 }
 
 // ── Start game ───────────────────────────────────────────────
+function resetObstacle(spawnOffset = nextObsGap){
+  obsX = W + spawnOffset;
+  nextObsGap = MIN_OBS_GAP + Math.floor(Math.random() * OBS_GAP_RANGE);
+}
+
 function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
   // Reset positions
-  dinoY=GROUND; dinoVY=0; score=0; obsX=W;
+  dinoY=GROUND; dinoVY=0; score=0;
+  tick = 0;
+  lastFrameTs = performance.now();
+  nextObsGap = 0;
+  resetObstacle(0);
   stripeOffset=0;
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
   // Scatter birds off-screen so they fly in naturally
   birds[0].x=W+100; birds[1].x=W+280; birds[2].x=W+520;
+  birds[0].y=55; birds[1].y=38; birds[2].y=70;
+  birds[0].baseY=55; birds[1].baseY=38; birds[2].baseY=70;
   state='running';
   window.gameScore=0;
   startBtn.textContent='Restart';
   setStatus('Running — press Space to jump!');
-  loop(0);
+  loop(lastFrameTs);
 }
 
 // ── Game over ────────────────────────────────────────────────
@@ -234,36 +256,41 @@ function gameOver(){
 
 // ── Main game loop ───────────────────────────────────────────
 let tick = 0;
-function loop(){
+let lastFrameTs = 0;
+function loop(ts){
   if(state!=='running') return;
-  tick++;
+  const delta = lastFrameTs ? (ts - lastFrameTs) / FRAME_MS : 1;
+  lastFrameTs = ts;
+  tick += delta;
 
   // Physics
-  dinoVY += GRAVITY;
-  dinoY  += dinoVY;
+  dinoVY += GRAVITY * delta;
+  dinoY  += dinoVY * delta;
   if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
 
   // Cactus
-  obsX -= 6;
-  if(obsX < -40){ obsX=W + Math.floor(Math.random()*200); score++; }
+  obsX -= BASE_SCROLL_SPEED * delta;
+  if(obsX < -40){ resetObstacle(); score++; }
   window.gameScore = score;
 
   // Road stripes scroll
-  stripeOffset = (stripeOffset + 6) % 110;
+  stripeOffset = (stripeOffset + BASE_SCROLL_SPEED * delta) % 110;
 
   // Clouds
   clouds.forEach(cl=>{
-    cl.x -= cl.speed;
+    cl.x -= cl.speed * delta;
     if(cl.x + 70 < 0) cl.x = W + 60;
   });
 
   // Birds
   birds.forEach(b=>{
-    b.x -= b.speed;
+    b.x -= b.speed * delta;
     if(b.x < -20) b.x = W + Math.random()*300 + 100;
     // Gentle up/down drift
-    b.y += Math.sin(tick*0.04 + b.flapT)*0.3;
-    b.y = Math.max(20, Math.min(85, b.y));
+    const phase = (tick % BIRD_PHASE_WRAP) * BIRD_OSCILLATION_SPEED + b.flapT;
+    const drift = Math.sin(phase) * BIRD_DRIFT_AMPLITUDE;
+    const boundedDrift = Math.min(BIRD_MAX_Y - b.baseY, Math.max(BIRD_MIN_Y - b.baseY, drift));
+    b.y = b.baseY + boundedDrift;
   });
 
   // Draw everything
