@@ -15,13 +15,22 @@ let state = 'idle';
 const GROUND = 185;   // dino feet y when standing
 let dinoY = GROUND, dinoVY = 0;
 const GRAVITY = 1.2, JUMP_V = -16;
+const DINO_HITBOX_LEFT = 46;
+const DINO_HITBOX_RIGHT = 84;
 
 // Cactus
 let obsX = W;
+const CACTUS_W = 30;
+const GROUPED_CACTUS_SPACING = 35;
+const GROUPED_CACTUS_SPAWN_PROB = 0.4;
+const CACTUS_OFFSCREEN_THRESHOLD = -40;
+let isGroupedCactus = false;
+let groupedCactiCount = 1;
 let score = 0;
 let rafId = null;
 
 window.gameScore = 0;
+syncGroupedCactusState();
 
 // ── Clouds ──────────────────────────────────────────────────
 const clouds = [
@@ -94,6 +103,10 @@ startBtn.addEventListener('click', ()=>{
 
 // ── Helpers ─────────────────────────────────────────────────
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
+function syncGroupedCactusState(){
+  window.isGroupedCactus = isGroupedCactus;
+  window.groupedCactiCount = groupedCactiCount;
+}
 
 // ── Draw sky gradient ────────────────────────────────────────
 function drawSky(){
@@ -173,7 +186,14 @@ function drawScene(tick, moving){
   drawGround(moving);
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
-    ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
+    if(isGroupedCactus){
+      for(let i=0; i < groupedCactiCount; i++){
+        const cactusX = obsX + (i * GROUPED_CACTUS_SPACING);
+        ctx.drawImage(cactusImg, cactusX, GROUND-50, CACTUS_W, 55);
+      }
+    } else {
+      ctx.drawImage(cactusImg, obsX, GROUND-50, CACTUS_W, 55);
+    }
   }
   // Dino
   ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
@@ -207,6 +227,8 @@ function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
+  isGroupedCactus = false;
+  groupedCactiCount = 1;
   stripeOffset=0;
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
@@ -214,6 +236,7 @@ function startGame(){
   birds[0].x=W+100; birds[1].x=W+280; birds[2].x=W+520;
   state='running';
   window.gameScore=0;
+  syncGroupedCactusState();
   startBtn.textContent='Restart';
   setStatus('Running — press Space to jump!');
   loop(0);
@@ -234,6 +257,17 @@ function gameOver(){
 
 // ── Main game loop ───────────────────────────────────────────
 let tick = 0;
+function spawnCactus(){
+  obsX = W + Math.floor(Math.random()*200);
+  isGroupedCactus = Math.random() < GROUPED_CACTUS_SPAWN_PROB;
+  if(isGroupedCactus){
+    groupedCactiCount = Math.random() < 0.5 ? 2 : 3;
+  } else {
+    groupedCactiCount = 1;
+  }
+  syncGroupedCactusState();
+}
+
 function loop(){
   if(state!=='running') return;
   tick++;
@@ -245,7 +279,12 @@ function loop(){
 
   // Cactus
   obsX -= 6;
-  if(obsX < -40){ obsX=W + Math.floor(Math.random()*200); score++; }
+  const lastCactusIndex = groupedCactiCount - 1;
+  const lastCactusX = obsX + (lastCactusIndex * GROUPED_CACTUS_SPACING);
+  if(lastCactusX < CACTUS_OFFSCREEN_THRESHOLD){
+    spawnCactus();
+    score++;
+  }
   window.gameScore = score;
 
   // Road stripes scroll
@@ -270,7 +309,18 @@ function loop(){
   drawScene(tick, true);
 
   // Collision check (AABB dino vs cactus)
-  if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
+  let cactusHit = false;
+  if(dinoY > GROUND-28){
+    for(let i=0; i < groupedCactiCount; i++){
+      const cactusX = obsX + (i * GROUPED_CACTUS_SPACING);
+      if(cactusX < DINO_HITBOX_RIGHT && (cactusX + CACTUS_W) > DINO_HITBOX_LEFT){
+        cactusHit = true;
+        break;
+      }
+    }
+  }
+
+  if(cactusHit){
     gameOver();
   } else {
     rafId = requestAnimationFrame(loop);
