@@ -181,7 +181,7 @@ function drawScene(tick, moving){
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
     if(isGroupedCactus){
-      for(let i=0;i<groupedCactiCount;i++){
+      for(let i=0; i < groupedCactiCount; i++){
         const cactusX = obsX + (i * GROUPED_CACTUS_SPACING);
         ctx.drawImage(cactusImg, cactusX, GROUND-50, CACTUS_W, 55);
       }
@@ -302,7 +302,7 @@ function loop(){
   // Collision check (AABB dino vs cactus)
   let cactusHit = false;
   if(dinoY > GROUND-28){
-    for(let i=0;i<groupedCactiCount;i++){
+    for(let i=0; i < groupedCactiCount; i++){
       const cactusX = obsX + (i * GROUPED_CACTUS_SPACING);
       if(cactusX < 84 && cactusX > 46){
         cactusHit = true;
