@@ -15,6 +15,8 @@ let state = 'idle';
 const GROUND = 185;   // dino feet y when standing
 let dinoY = GROUND, dinoVY = 0;
 const GRAVITY = 1.2, JUMP_V = -16;
+const DINO_HITBOX_LEFT = 46;
+const DINO_HITBOX_RIGHT = 84;
 
 // Cactus
 let obsX = W;
@@ -255,7 +257,11 @@ let tick = 0;
 function spawnCactus(){
   obsX = W + Math.floor(Math.random()*200);
   isGroupedCactus = Math.random() < GROUPED_CACTUS_SPAWN_PROB;
-  groupedCactiCount = isGroupedCactus ? (Math.random() < 0.5 ? 2 : 3) : 1;
+  if(isGroupedCactus){
+    groupedCactiCount = Math.random() < 0.5 ? 2 : 3;
+  } else {
+    groupedCactiCount = 1;
+  }
   window.isGroupedCactus = isGroupedCactus;
   window.groupedCactiCount = groupedCactiCount;
 }
@@ -271,7 +277,8 @@ function loop(){
 
   // Cactus
   obsX -= 6;
-  const lastCactusX = obsX + ((groupedCactiCount - 1) * GROUPED_CACTUS_SPACING);
+  const lastCactusIndex = groupedCactiCount - 1;
+  const lastCactusX = obsX + (lastCactusIndex * GROUPED_CACTUS_SPACING);
   if(lastCactusX < -40){
     spawnCactus();
     score++;
@@ -304,7 +311,7 @@ function loop(){
   if(dinoY > GROUND-28){
     for(let i=0; i < groupedCactiCount; i++){
       const cactusX = obsX + (i * GROUPED_CACTUS_SPACING);
-      if(cactusX < 84 && cactusX > 46){
+      if(cactusX < DINO_HITBOX_RIGHT && cactusX > DINO_HITBOX_LEFT){
         cactusHit = true;
         break;
       }
