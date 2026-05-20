@@ -30,8 +30,7 @@ let score = 0;
 let rafId = null;
 
 window.gameScore = 0;
-window.isGroupedCactus = false;
-window.groupedCactiCount = 1;
+syncGroupedCactusState();
 
 // ── Clouds ──────────────────────────────────────────────────
 const clouds = [
@@ -104,6 +103,10 @@ startBtn.addEventListener('click', ()=>{
 
 // ── Helpers ─────────────────────────────────────────────────
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
+function syncGroupedCactusState(){
+  window.isGroupedCactus = isGroupedCactus;
+  window.groupedCactiCount = groupedCactiCount;
+}
 
 // ── Draw sky gradient ────────────────────────────────────────
 function drawSky(){
@@ -233,8 +236,7 @@ function startGame(){
   birds[0].x=W+100; birds[1].x=W+280; birds[2].x=W+520;
   state='running';
   window.gameScore=0;
-  window.isGroupedCactus = false;
-  window.groupedCactiCount = 1;
+  syncGroupedCactusState();
   startBtn.textContent='Restart';
   setStatus('Running — press Space to jump!');
   loop(0);
@@ -263,8 +265,7 @@ function spawnCactus(){
   } else {
     groupedCactiCount = 1;
   }
-  window.isGroupedCactus = isGroupedCactus;
-  window.groupedCactiCount = groupedCactiCount;
+  syncGroupedCactusState();
 }
 
 function loop(){
