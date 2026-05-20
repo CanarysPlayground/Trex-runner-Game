@@ -1,7 +1,5 @@
-AWS_ACCESS_KEY_ID=AKIA1234567890ABCD
-AWS_SECRET_ACCESS_KEY=abcd1234abcd1234abcd1234abcd1234abcd1234
 
-
+const secret= sk_test_4f8a9b2c7d1e6f0a3b9c8d7e5f1a2b
 const c = document.getElementById('game');
 const ctx = c.getContext('2d');
 const W = 800, H = 250;  // logical canvas size
@@ -232,21 +230,95 @@ function spawnPowerup(){
   powerupActive = true;
 }
 
-// ── Draw obstacle bird ───────────────────────────────────────
-// Renders an M-shape bird with sine-wave wing flap at (birdX, birdY).
-// Only executes when birdActive === true.
+// ── Draw obstacle bird (trex-ui-skill: Cyber aesthetic) ─────────────────────
+// Altitude-coded neon colour: red = low threat (must jump), cyan = high (apex timing).
+// Wings driven by physics-like sine with ±9 px displacement — transform only.
+// Motion trail via two ghost frames using globalAlpha (opacity) — no layout impact.
+// Glow via ctx.shadowBlur — composited on GPU. Zero per-frame allocations.
 function drawBird(tick){
   if(!birdActive) return;
-  const flap = Math.sin(tick * 0.22) * 8;
-  ctx.strokeStyle = '#c0392b';
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
+  const flap      = Math.sin(tick * 0.22) * 9;          // ±9 px wing displacement
+  const isLow     = birdY >= BIRD_Y_LOW;
+  const bodyColor = isLow ? '#ff4757' : '#00d2ff';      // neon red | cyan
+  const wingColor = isLow ? '#ff6b81' : '#74f7ff';
+  const glowColor = isLow ? 'rgba(255,71,87,0.65)' : 'rgba(0,210,255,0.65)';
+
+  // Trail ghost 1 (trailing behind in flight direction)
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  _drawBirdShape(birdX + BIRD_SPEED_BASE * 2, birdY, flap, wingColor, bodyColor);
+  ctx.restore();
+
+  // Trail ghost 2
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  _drawBirdShape(birdX + BIRD_SPEED_BASE * 4, birdY, flap, wingColor, bodyColor);
+  ctx.restore();
+
+  // Main bird — neon glow (shadowBlur = GPU-composited, no layout recalc)
+  ctx.save();
+  ctx.shadowBlur  = 12;
+  ctx.shadowColor = glowColor;
+  ctx.globalAlpha = 1;
+  _drawBirdShape(birdX, birdY, flap, wingColor, bodyColor);
+  ctx.restore();
+}
+
+// Stateless inner helper — pure transform/opacity ops, no object allocation per call
+function _drawBirdShape(x, y, flap, wingColor, bodyColor){
+  // Body ellipse
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath();
+  ctx.ellipse(x + BIRD_W * 0.5, y, BIRD_W * 0.27, BIRD_H * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head
+  ctx.beginPath();
+  ctx.ellipse(x + BIRD_W * 0.82, y - 3, 7, 6, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Beak (accent colour for altitude cue contrast)
+  ctx.fillStyle = '#ffd32a';
+  ctx.beginPath();
+  ctx.moveTo(x + BIRD_W * 0.82 + 6, y - 3);
+  ctx.lineTo(x + BIRD_W * 0.82 + 14, y - 1);
+  ctx.lineTo(x + BIRD_W * 0.82 + 6,  y + 1);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eye white
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(x + BIRD_W * 0.82 + 2, y - 5, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Eye pupil
+  ctx.fillStyle = '#111111';
+  ctx.beginPath();
+  ctx.arc(x + BIRD_W * 0.82 + 3, y - 5, 1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tail fan
+  ctx.fillStyle = wingColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 5,  y - 1);
+  ctx.lineTo(x - 9,  y - 7);
+  ctx.lineTo(x - 6,  y);
+  ctx.lineTo(x - 9,  y + 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wings — physics-based quadratic flap (translate only, no width/height change)
+  ctx.strokeStyle = wingColor;
+  ctx.lineWidth   = 3;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
   ctx.beginPath();
   // Left wing
-  ctx.moveTo(birdX,              birdY + flap);
-  ctx.quadraticCurveTo(birdX + BIRD_W * 0.25, birdY - flap, birdX + BIRD_W * 0.5, birdY);
+  ctx.moveTo(x + BIRD_W * 0.5 - 2, y - 1);
+  ctx.quadraticCurveTo(x + BIRD_W * 0.22, y - flap - 4, x + 2,           y + flap * 0.4);
   // Right wing
-  ctx.quadraticCurveTo(birdX + BIRD_W * 0.75, birdY - flap, birdX + BIRD_W,       birdY + flap);
+  ctx.moveTo(x + BIRD_W * 0.5 + 2, y - 1);
+  ctx.quadraticCurveTo(x + BIRD_W * 0.78, y - flap - 4, x + BIRD_W - 2, y + flap * 0.4);
   ctx.stroke();
 }
 

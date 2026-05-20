@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "prompt": "Act as a game developer. Focus on improving the player experience of my T-Rex runner game by refining gameplay balance, smooth animations, and user feedback like sound effects or visual cues."
+      }
+    ]
+  }
+}
