@@ -133,9 +133,129 @@ fetch('http://localhost:3000/score')
   .then(d=>{ if(highScoreEl) highScoreEl.textContent='High Score: '+d.highScore; })
   .catch(()=>{});
 
+// ── Sound effects (Web Audio API) ───────────────────────────
+const _audioCtx = (() => {
+  try { return new (window.AudioContext || window.webkitAudioContext)(); } catch(e){ return null; }
+})();
+function playSound(type){
+  if(!_audioCtx) return;
+  try {
+    if(_audioCtx.state === 'suspended') _audioCtx.resume();
+    const o = _audioCtx.createOscillator();
+    const g = _audioCtx.createGain();
+    o.connect(g); g.connect(_audioCtx.destination);
+    const t = _audioCtx.currentTime;
+    if(type === 'jump'){
+      o.type = 'sine';
+      o.frequency.setValueAtTime(280, t);
+      o.frequency.exponentialRampToValueAtTime(560, t + 0.12);
+      g.gain.setValueAtTime(0.12, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      o.start(t); o.stop(t + 0.15);
+    } else if(type === 'collect'){
+      o.type = 'sine';
+      o.frequency.setValueAtTime(440, t);
+      o.frequency.exponentialRampToValueAtTime(880, t + 0.1);
+      g.gain.setValueAtTime(0.1, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.start(t); o.stop(t + 0.22);
+    } else if(type === 'die'){
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(380, t);
+      o.frequency.exponentialRampToValueAtTime(75, t + 0.35);
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.start(t); o.stop(t + 0.35);
+    } else if(type === 'land'){
+      o.type = 'sine';
+      o.frequency.setValueAtTime(160, t);
+      o.frequency.exponentialRampToValueAtTime(90, t + 0.07);
+      g.gain.setValueAtTime(0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      o.start(t); o.stop(t + 0.1);
+    }
+  } catch(e){}
+}
+
+// ── Dust particles ───────────────────────────────────────────
+const particles = [];
+function spawnDust(x, y){
+  for(let i = 0; i < 6; i++){
+    particles.push({
+      x: x + (Math.random()-0.5)*22,
+      y,
+      vx: (Math.random()-0.5)*2.2,
+      vy: -Math.random()*1.8 - 0.2,
+      life: 18 + Math.floor(Math.random()*10),
+      r: 2 + Math.random()*3.5
+    });
+  }
+}
+function updateDrawParticles(){
+  for(let i = particles.length-1; i >= 0; i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life--;
+    if(p.life <= 0){ particles.splice(i,1); continue; }
+    ctx.save();
+    ctx.globalAlpha = p.life / 28;
+    ctx.fillStyle = '#c8a96e';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── Milestone toast ──────────────────────────────────────────
+const SCORE_MILESTONES = [50, 100, 200, 300, 500, 750, 1000];
+let milestoneText = '', milestoneTimer = 0;
+function checkMilestone(prev, next){
+  for(const m of SCORE_MILESTONES){
+    if(prev < m && next >= m){ milestoneText = `✦ ${m} pts!`; milestoneTimer = 90; break; }
+  }
+}
+function drawMilestone(){
+  if(milestoneTimer <= 0) return;
+  const alpha = Math.min(1, milestoneTimer / 25);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#f1c40f';
+  ctx.font = 'bold 20px Segoe UI,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = 'rgba(241,196,15,0.9)';
+  ctx.fillText(milestoneText, W/2, H/2 - 28);
+  ctx.restore();
+  milestoneTimer--;
+}
+
+// ── Screen flash ─────────────────────────────────────────────
+let flashAlpha = 0, flashColor = '#ff4757';
+function triggerFlash(color, alpha){ flashColor = color; flashAlpha = alpha; }
+function drawFlash(){
+  if(flashAlpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = flashAlpha;
+  ctx.fillStyle = flashColor;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  flashAlpha = Math.max(0, flashAlpha - 0.045);
+}
+
 // ── Input ───────────────────────────────────────────────────
-document.addEventListener('keydown', ()=>{
-  if(state==='running' && dinoY>=GROUND) dinoVY=JUMP_V;
+let jumpKeyHeld = false;
+document.addEventListener('keydown', e=>{
+  if(state==='running' && dinoY>=GROUND && !jumpKeyHeld){
+    dinoVY = JUMP_V;
+    jumpKeyHeld = true;
+    playSound('jump');
+  }
+});
+document.addEventListener('keyup', ()=>{
+  jumpKeyHeld = false;
+  // Variable height: cut upward velocity on early release
+  if(state==='running' && dinoVY < -7) dinoVY = -7;
 });
 startBtn.addEventListener('click', ()=>{
   if(state==='idle'||state==='over') startGame();
@@ -413,11 +533,15 @@ function drawScene(tick, moving){
   }
   // Dino
   ctx.drawImage(dinoImg, 40, dinoY-32, 44, 44);
+  // Dust particles (above ground, below score)
+  updateDrawParticles();
   // Score
   ctx.fillStyle='#1a4a6b';
   ctx.font='bold 15px Segoe UI,sans-serif';
   ctx.fillText('Score: '+score, 12, 22);
   drawPowerupHUD();
+  drawMilestone();
+  drawFlash();
 }
 
 // ── Idle frame ───────────────────────────────────────────────
@@ -450,6 +574,7 @@ function startGame(){
   shieldTimer=0; scoreBoostActive=false; scoreBoostTimer=0; birdHitCooldown=0; birdWasAbsorbed=false;
   slowMotionActive=false; slowMotionTimer=0;
   stripeOffset=0;
+  particles.length=0; milestoneTimer=0; flashAlpha=0; jumpKeyHeld=false;
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
   // Scatter birds off-screen so they fly in naturally
@@ -474,6 +599,8 @@ function startGame(){
 // ── Game over ────────────────────────────────────────────────
 function gameOver(){
   state='over';
+  playSound('die');
+  triggerFlash('#ff4757', 0.38);
   startBtn.textContent='Restart';
   setStatus('Game Over! Score: '+score+' — click Restart to play again');
   // Re-enable difficulty selector
@@ -488,20 +615,30 @@ function gameOver(){
 
 // ── Main game loop ───────────────────────────────────────────
 let tick = 0;
+let _wasAirborne = false;
 function loop(){
   if(state!=='running') return;
   tick++;
 
   // Physics
+  const _airborne = dinoY < GROUND;
   dinoVY += GRAVITY;
   dinoY  += dinoVY;
-  if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
+  if(dinoY >= GROUND){
+    dinoY=GROUND; dinoVY=0;
+    if(_airborne){ spawnDust(62, GROUND+2); playSound('land'); } // landing feedback
+  }
 
   // Cactus
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   const effectiveObsSpeed = diffConfig.obsSpeed * (slowMotionActive ? 0.5 : 1);
   obsX -= effectiveObsSpeed;
-  if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1); }
+  if(obsX < -40){
+    obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange);
+    const prevScore = score;
+    score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1);
+    checkMilestone(prevScore, score);
+  }
   window.gameScore = score;
   window.birdActive = birdActive;
   window.birdX = birdX;
@@ -573,6 +710,8 @@ function loop(){
       const puTop = POWERUP_Y - POWERUP_W * 0.5, puBot = POWERUP_Y + POWERUP_W * 0.5;
       if(powerupX < 84 && powerupX + POWERUP_W > 40 && puTop < dinoY + 12 && puBot > dinoY - 32){
         powerupActive = false;
+        playSound('collect');
+        triggerFlash('#2ecc71', 0.22);
         if(powerupType === 'shield' && !shieldActive){
           shieldActive = true; shieldTimer = SHIELD_DURATION;
         } else if(powerupType === 'scoreBoost' && !scoreBoostActive){

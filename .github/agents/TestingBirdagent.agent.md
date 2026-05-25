@@ -2,6 +2,7 @@
 name: Testing Engineer Agent
 description: Creates playwright test scripts for bird obstacle behavior
 argument-hint: "Feature to test"
+skills: [playwright, test automation, JavaScript, trex-ui-skill]
 ---
 
 # Role: Testing Automation Engineer
