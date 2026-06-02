@@ -15,3 +15,11 @@
 ## Delivery
 - CI/CD must validate both existing and new functionality
 - Fail pipelines on test failures
+
+## Terrain Switching Standards
+- Terrain updates must not reload the page
+- Preserve existing game loop
+- Use CSS classes or canvas state updates
+- Avoid modifying obstacle collision logic
+- Terrain transitions must remain testable
+

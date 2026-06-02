@@ -1,9 +1,9 @@
-
-const secret= sk_test_4f8a9b2c7d1e6f0a3b9c8d7e5f1a2b
 const c = document.getElementById('game');
-const ctx = c.getContext('2d');
+if(!c) { console.error('Canvas element not found'); }
+const ctx = c?.getContext('2d');
+if(!ctx) { console.error('Failed to get 2D context'); }
 const W = 800, H = 250;  // logical canvas size
-c.width = W; c.height = H;
+if(c){ c.width = W; c.height = H; }
 
 const highScoreEl = document.getElementById('highscore');
 const statusEl    = document.getElementById('status');
@@ -54,6 +54,11 @@ let birdWasAbsorbed      = false; // suppresses dodge bonus when shield took the
 let slowMotionActive     = false;
 let slowMotionTimer      = 0;
 
+// ── Terrain switching (Dynamic Desert ↔ Ice) ────────────────
+let terrain              = 'desert';       // 'desert' | 'ice'
+let terrainSwitchTriggered = false;        // Prevents duplicate triggers
+let terrainSwitchScore   = -1;             // Score at which switch occurred
+
 window.gameScore = 0;
 
 // ── Difficulty profiles ─────────────────────────────────────
@@ -64,9 +69,34 @@ const DIFFICULTY_PROFILES = {
 };
 window.selectedDifficulty = 'medium';
 
+// ── Terrain color palettes ──────────────────────────────────
+const TERRAIN_COLORS = {
+  desert: {
+    skyGradient: ['#5ba3d9', '#acd8f0', '#d4ecfb'],
+    groundColor: '#c8a96e',
+    roadColor: '#7a7a7a',
+    roadEdgeLine: '#ffffff',
+    cloudColor: 'rgba(255,255,255,0.92)',
+    stripeColor: '#ffff99'
+  },
+  ice: {
+    skyGradient: ['#87ceeb', '#b3d9e8', '#d8f0ff'],
+    groundColor: '#e8f4f8',
+    roadColor: '#a0c8d8',
+    roadEdgeLine: '#d0e8f0',
+    cloudColor: 'rgba(240,248,255,0.95)',
+    stripeColor: '#66bbff'
+  }
+};
+
 document.querySelectorAll('input[name="difficulty"]').forEach(r => {
   r.addEventListener('change', e => {
     window.selectedDifficulty = e.target.value;
+    // Reset terrain if user changes difficulty during gameplay
+    if(state === 'running' && terrain !== 'desert') {
+      terrain = 'desert';
+      terrainSwitchTriggered = false;
+    }
     const diffDisplay = document.getElementById('difficulty-display');
     if (diffDisplay) diffDisplay.textContent = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
   });
@@ -128,10 +158,22 @@ cactusImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
 </svg>`);
 
 // ── API ─────────────────────────────────────────────────────
-fetch('http://localhost:3000/score')
-  .then(r=>r.json())
-  .then(d=>{ if(highScoreEl) highScoreEl.textContent='High Score: '+d.highScore; })
-  .catch(()=>{});
+function fetchHighScore(){
+  fetch('http://localhost:3000/score')
+    .then(r => r.json())
+    .then(d => { 
+      if(highScoreEl && d.highScore !== undefined) {
+        highScoreEl.textContent = 'High Score: ' + d.highScore;
+      }
+    })
+    .catch(err => {
+      console.warn('Failed to fetch high score:', err);
+      if(highScoreEl) highScoreEl.textContent = 'High Score: 0';
+    });
+}
+
+// Load high score on page load
+fetchHighScore();
 
 // ── Sound effects (Web Audio API) ───────────────────────────
 const _audioCtx = (() => {
@@ -265,29 +307,31 @@ startBtn.addEventListener('click', ()=>{
 function setStatus(msg){ if(statusEl) statusEl.textContent=msg; }
 
 // ── Draw sky gradient ────────────────────────────────────────
-function drawSky(){
+function drawSky(terrainType = 'desert'){
+  const colors = TERRAIN_COLORS[terrainType].skyGradient;
   const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#5ba3d9');
-  grad.addColorStop(0.55,'#acd8f0');
-  grad.addColorStop(1,'#d4ecfb');
+  grad.addColorStop(0, colors[0]);
+  grad.addColorStop(0.55, colors[1]);
+  grad.addColorStop(1, colors[2]);
   ctx.fillStyle = grad;
   ctx.fillRect(0,0,W,H);
 }
 
 // ── Draw ground / road ───────────────────────────────────────
-function drawGround(moving){
+function drawGround(moving, terrainType = 'desert'){
+  const colors = TERRAIN_COLORS[terrainType];
   // Soil strip
-  ctx.fillStyle='#c8a96e';
+  ctx.fillStyle = colors.groundColor;
   ctx.fillRect(0,198,W,H-198);
   // Road surface
-  ctx.fillStyle='#7a7a7a';
+  ctx.fillStyle = colors.roadColor;
   ctx.fillRect(0,196,W,20);
   // Road edge lines
-  ctx.fillStyle='#ffffff';
+  ctx.fillStyle = colors.roadEdgeLine;
   ctx.fillRect(0,196,W,2);
   ctx.fillRect(0,214,W,2);
   // Dashed centre stripes
-  ctx.fillStyle='#ffff99';
+  ctx.fillStyle = colors.stripeColor;
   const offset = moving ? stripeOffset : 0;
   for(let i=0;i<12;i++){
     const sx = ((i*110 - offset) % (W+110) + W+110) % (W+110) - 50;
@@ -296,9 +340,10 @@ function drawGround(moving){
 }
 
 // ── Draw clouds ──────────────────────────────────────────────
-function drawClouds(){
+function drawClouds(terrainType = 'desert'){
+  const cloudColor = TERRAIN_COLORS[terrainType].cloudColor;
   clouds.forEach(cl=>{
-    ctx.fillStyle='rgba(255,255,255,0.92)';
+    ctx.fillStyle = cloudColor;
     // Main puff
     ctx.beginPath();
     ctx.ellipse(cl.x, cl.y, cl.w*0.5, 14, 0, 0, Math.PI*2);
@@ -519,13 +564,29 @@ function drawPowerupHUD(){
   }
 }
 
+// ── Check and apply terrain switch (observer pattern) ─────
+function checkTerrainTrigger(){
+  // Only trigger in Easy Mode, at score >= 5, and only once per game
+  if(window.selectedDifficulty === 'easy' && score >= 5 && !terrainSwitchTriggered){
+    applyTerrainSwitch();
+  }
+}
+
+// ── Apply terrain switch (state mutation) ──────────────────
+function applyTerrainSwitch(){
+  terrain = 'ice';
+  terrainSwitchTriggered = true;
+  terrainSwitchScore = score;
+  console.log(`🌨️  Terrain switched to Ice at score ${score}`);
+}
+
 // ── Full scene draw (static snapshot for idle/over) ──────────
 function drawScene(tick, moving){
-  drawSky();
-  drawClouds();
+  drawSky(terrain);
+  drawClouds(terrain);
   drawBirds(tick);
   drawBird(tick);
-  drawGround(moving);
+  drawGround(moving, terrain);
   drawPowerup();
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
@@ -574,6 +635,10 @@ function startGame(){
   shieldTimer=0; scoreBoostActive=false; scoreBoostTimer=0; birdHitCooldown=0; birdWasAbsorbed=false;
   slowMotionActive=false; slowMotionTimer=0;
   stripeOffset=0;
+  // Reset terrain to desert
+  terrain='desert';
+  terrainSwitchTriggered=false;
+  terrainSwitchScore=-1;
   particles.length=0; milestoneTimer=0; flashAlpha=0; jumpKeyHeld=false;
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
@@ -607,10 +672,17 @@ function gameOver(){
   document.getElementById('difficulty-selector').querySelectorAll('input').forEach(r => r.disabled = false);
   // Draw frozen scene
   drawScene(0, false);
-  fetch('http://localhost:3000/score/'+score,{method:'POST'})
-    .then(r=>r.json())
-    .then(d=>{ if(highScoreEl) highScoreEl.textContent='High Score: '+d.highScore; })
-    .catch(()=>{});
+  // Update high score on API
+  fetch('http://localhost:3000/score/'+score, {method:'POST'})
+    .then(r => r.json())
+    .then(d => { 
+      if(highScoreEl && d.highScore !== undefined) {
+        highScoreEl.textContent = 'High Score: ' + d.highScore;
+      }
+    })
+    .catch(err => {
+      console.warn('Failed to update high score:', err);
+    });
 }
 
 // ── Main game loop ───────────────────────────────────────────
@@ -638,6 +710,8 @@ function loop(){
     const prevScore = score;
     score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1);
     checkMilestone(prevScore, score);
+    // Check terrain trigger after score update (read-only observer)
+    checkTerrainTrigger();
   }
   window.gameScore = score;
   window.birdActive = birdActive;
@@ -745,12 +819,42 @@ function loop(){
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
     gameOver();
-  } else {
+    return;
+  }
+
+  // Continue animation loop
+  if(state === 'running') {
     rafId = requestAnimationFrame(loop);
   }
 }
 
 // ── Boot ─────────────────────────────────────────────────────
-dinoImg.onload = ()=>{
-  if(state==='idle') rafId = requestAnimationFrame(drawIdle);
+let imagesLoaded = 0;
+const totalImages = 2;  // dinoImg, cactusImg
+
+dinoImg.onload = () => {
+  imagesLoaded++;
+  if(imagesLoaded === totalImages && state === 'idle') {
+    rafId = requestAnimationFrame(drawIdle);
+  }
 };
+
+cactusImg.onload = () => {
+  imagesLoaded++;
+  if(imagesLoaded === totalImages && state === 'idle') {
+    rafId = requestAnimationFrame(drawIdle);
+  }
+};
+
+// Fallback: Start game loop after short delay even if images fail
+setTimeout(() => {
+  if(state === 'idle' && !rafId) {
+    console.warn('Starting game without waiting for all images');
+    rafId = requestAnimationFrame(drawIdle);
+  }
+}, 1500);
+
+// Initial render
+if(ctx && state === 'idle') {
+  drawScene(0, false);
+}
