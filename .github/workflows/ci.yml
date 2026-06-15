@@ -170,3 +170,5 @@ jobs:
         with:
           name: playwright-traces
           path: test-results/
+
+// Note: API server logs are not captured here since they're printed to stdout and would be interleaved with UI logs in the Actions summary. If needed, we could modify the server startup step to redirect output to a file and upload that as an artifact on failure.

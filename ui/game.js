@@ -102,6 +102,9 @@ document.querySelectorAll('input[name="difficulty"]').forEach(r => {
   });
 });
 
+
+
+
 // ── Clouds ──────────────────────────────────────────────────
 const clouds = [
   {x:120, y:35, w:90, speed:0.6},
