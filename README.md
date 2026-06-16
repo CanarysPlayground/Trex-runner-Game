@@ -21,14 +21,15 @@ A browser-based **T-Rex Runner** canvas game with a Node.js high-score API and a
 ```
 ├── ui/
 │   ├── index.html        # Game shell — HUD, difficulty selector, canvas
-│   └── game.js           # Game loop, obstacles, power-ups, difficulty logic
+│   └── game.js           # Game loop, obstacles, power-ups, terrain, difficulty logic
 ├── api/
-│   ├── server.js         # Express high-score API
+│   ├── server.js         # Express high-score API (in-memory)
 │   └── package.json
 ├── tests/
 │   ├── trex-e2e.spec.js        # Full end-to-end suite (11 categories)
 │   ├── trex-jump.spec.js       # Jump mechanics and bird-unlock tests
-│   └── bird-obstacle.spec.ts   # Bird obstacle behaviour (TypeScript)
+│   ├── bird-obstacle.spec.ts   # Bird obstacle behaviour (TypeScript)
+│   └── terrain-switch.spec.ts  # Terrain switching Desert ↔ Ice (TypeScript)
 ├── package.json
 └── playwright.config.js
 ```
@@ -46,6 +47,19 @@ Three profiles selectable before the game starts (radio buttons in the HUD):
 | Medium | 6 | ×1 | default |
 | Hard | 9 | ×2 | narrow |
 
+> Changing difficulty mid-game resets the terrain back to Desert.
+
+### Terrain Switching (Dynamic Desert ↔ Ice)
+- Triggers **once per game** in **Easy mode** when `score >= 5`
+- Desert → Ice: sky, ground, road, cloud, and stripe colours all switch to an icy palette
+- `checkTerrainTrigger()` is exposed as a global for test control
+- `terrainSwitchTriggered` flag prevents duplicate transitions; resets on game restart
+
+| Terrain | Sky | Ground | Road |
+|---------|-----|--------|------|
+| Desert | Blue gradient | Sandy tan (`#c8a96e`) | Grey (`#7a7a7a`) |
+| Ice | Pale-blue gradient | Icy white-blue (`#e8f4f8`) | Ice blue (`#a0c8d8`) |
+
 ### Bird Obstacle
 - Spawns only when `score >= 5`
 - Two heights: **low** (160 px — must jump) and **high** (82 px — timing challenge near jump apex)
@@ -57,6 +71,18 @@ Three profiles selectable before the game starts (radio buttons in the HUD):
 | Shield | ~5 s (300 frames) | Absorbs one bird hit; grants dodge bonus |
 | Score Boost | ~8 s (480 frames) | Multiplies score gain |
 | Slow Motion | ~6 s (360 frames) | Reduces obstacle speed |
+
+### Sound Effects
+Web Audio API oscillator sounds for:
+- **Jump** — sine wave sweep 280 Hz → 560 Hz
+- **Collect** — power-up pickup tone
+- **Game Over** — collision sound
+
+### Visuals
+- SVG sprites for dino and cactus (inline data URIs, no external assets)
+- Animated background birds (decorative, 3 birds at varying heights and speeds)
+- Animated road stripes that scroll with obstacle speed
+- Animated clouds with per-terrain colour tinting
 
 ### HUD Elements
 - `#highscore` — persisted via API between reloads
@@ -135,6 +161,7 @@ TREX_GAME_URL=http://localhost:8080/ui/ npx playwright test
 | `trex-e2e.spec.js` | UI init, dino physics, cactus, difficulty profiles, bird obstacle, shield, score boost, slow motion, power-up interactions, game-over/restart, high-score API |
 | `trex-jump.spec.js` | Jump mechanics, keyboard interaction, bird-unlock threshold |
 | `bird-obstacle.spec.ts` | Bird spawn threshold, height variants, shield absorption, dodge bonus |
+| `terrain-switch.spec.ts` | Terrain switch trigger (Easy + score ≥ 5), canvas pixel colour validation, restart resets terrain, difficulty change resets terrain, edge cases |
 
 ---
 
