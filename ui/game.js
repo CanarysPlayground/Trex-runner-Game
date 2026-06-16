@@ -40,6 +40,14 @@ let terrainSwitchScore   = -1;             // Score at which switch occurred
 
 window.gameScore = 0;
 
+// ── Power-ups (Easy mode only) ──────────────────────────────
+let powerUpToken = { x: -200, y: GROUND - 18, type: 'shield', active: false };
+let powerUpSpawnCooldown = 360;
+let shieldActive = false, shieldTimer = 0;
+let slowmoActive = false, slowmoTimer = 0;
+const POWERUP_DURATION = 300;  // ~5 s at 60 fps
+window.activePowerUps = {};
+
 // ── Difficulty profiles ─────────────────────────────────────
 const DIFFICULTY_PROFILES = {
   easy:   { obsSpeed: 4, obsGapMin: 250, obsGapRange: 200, scoreMultiplier: 1, cloudSpeedScale: 0.6 },
@@ -260,6 +268,42 @@ function drawFlash(){
   flashAlpha = Math.max(0, flashAlpha - 0.045);
 }
 
+// ── Power-up helpers (Easy mode only) ───────────────────────
+function spawnPowerUp(){
+  powerUpToken.type = Math.random() < 0.5 ? 'shield' : 'slowmo';
+  powerUpToken.x = W + 80 + Math.floor(Math.random() * 200);
+  powerUpToken.y = GROUND - 18;
+  powerUpToken.active = true;
+}
+function drawPowerUpToken(){
+  if(!powerUpToken.active) return;
+  const color = powerUpToken.type === 'shield' ? '#00e5ff' : '#ffd32a';
+  const label = powerUpToken.type === 'shield' ? '\u{1F6E1}' : '\u23F1';
+  ctx.save();
+  ctx.shadowBlur = 14; ctx.shadowColor = color;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(powerUpToken.x, powerUpToken.y, 12, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.font = '13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, powerUpToken.x, powerUpToken.y);
+  ctx.restore();
+}
+function drawPowerUpHUD(){
+  let xOff = W - 12;
+  if(shieldActive){
+    ctx.save(); ctx.font='bold 13px Segoe UI,sans-serif'; ctx.textAlign='right';
+    ctx.fillStyle='#00e5ff'; ctx.shadowBlur=8; ctx.shadowColor='#00e5ff';
+    ctx.fillText('\u{1F6E1} '+Math.ceil(shieldTimer/60)+'s', xOff, 22);
+    ctx.restore(); xOff -= 70;
+  }
+  if(slowmoActive){
+    ctx.save(); ctx.font='bold 13px Segoe UI,sans-serif'; ctx.textAlign='right';
+    ctx.fillStyle='#ffd32a'; ctx.shadowBlur=8; ctx.shadowColor='#ffd32a';
+    ctx.fillText('\u23F1 '+Math.ceil(slowmoTimer/60)+'s', xOff, 22);
+    ctx.restore();
+  }
+}
+
 // ── Input ───────────────────────────────────────────────────
 let jumpKeyHeld = false;
 document.addEventListener('keydown', e=>{
@@ -476,6 +520,7 @@ function drawScene(tick, moving){
   drawBirds(tick);
   drawBird(tick);
   drawGround(moving, terrain);
+  drawPowerUpToken();
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
     ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
@@ -489,6 +534,7 @@ function drawScene(tick, moving){
   ctx.font='bold 15px Segoe UI,sans-serif';
   ctx.fillText('Score: '+score, 12, 22);
   drawMilestone();
+  drawPowerUpHUD();
   drawFlash();
 }
 
@@ -524,6 +570,10 @@ function startGame(){
   terrainSwitchTriggered=false;
   terrainSwitchScore=-1;
   particles.length=0; milestoneTimer=0; flashAlpha=0; jumpKeyHeld=false;
+  // Reset power-ups
+  powerUpToken.active=false; powerUpSpawnCooldown=360;
+  shieldActive=false; shieldTimer=0; slowmoActive=false; slowmoTimer=0;
+  window.activePowerUps={};
   // Scatter clouds to spread
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
   // Scatter birds off-screen so they fly in naturally
@@ -588,7 +638,8 @@ function loop(){
   // Cactus
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   const effectiveObsSpeed = diffConfig.obsSpeed;
-  obsX -= effectiveObsSpeed;
+  const speedMult = (slowmoActive && window.selectedDifficulty === 'easy') ? 0.5 : 1;
+  obsX -= effectiveObsSpeed * speedMult;
   if(obsX < -40){
     obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange);
     const prevScore = score;
@@ -628,11 +679,34 @@ function loop(){
     birdSpawnCooldown = 220 + Math.floor(Math.random() * 160);
   }
   if(birdActive){
-    birdX -= BIRD_SPEED_BASE;
+    birdX -= BIRD_SPEED_BASE * speedMult;
     if(birdX < -60){
       score += 10;
       birdActive = false;
     }
+  }
+
+  // Power-up spawn, move, collect (Easy mode only)
+  if(window.selectedDifficulty === 'easy'){
+    powerUpSpawnCooldown--;
+    if(!powerUpToken.active && powerUpSpawnCooldown <= 0 && score >= 3){
+      spawnPowerUp();
+      powerUpSpawnCooldown = 400 + Math.floor(Math.random() * 200);
+    }
+    if(powerUpToken.active){
+      powerUpToken.x -= effectiveObsSpeed * speedMult;
+      if(powerUpToken.x < -30) powerUpToken.active = false;
+      // Collect: dino x:40-84, y:(dinoY-32)-(dinoY+12); token circle r=12
+      if(powerUpToken.x > 28 && powerUpToken.x < 96 &&
+         powerUpToken.y > dinoY - 44 && powerUpToken.y < dinoY + 24){
+        powerUpToken.active = false;
+        if(powerUpToken.type === 'shield'){ shieldActive=true; shieldTimer=POWERUP_DURATION; triggerFlash('#00e5ff', 0.25); }
+        else { slowmoActive=true; slowmoTimer=POWERUP_DURATION; triggerFlash('#ffd32a', 0.25); }
+      }
+    }
+    if(shieldActive){ shieldTimer--; if(shieldTimer<=0){ shieldActive=false; shieldTimer=0; } }
+    if(slowmoActive){ slowmoTimer--; if(slowmoTimer<=0){ slowmoActive=false; slowmoTimer=0; } }
+    window.activePowerUps = { shield: shieldActive, slowmo: slowmoActive };
   }
 
   // Draw everything
@@ -644,13 +718,14 @@ function loop(){
   if(birdActive && birdX < 84 && birdX + BIRD_W > 40 &&
      birdY > dinoY - 43 && birdY < dinoY + 23){
     birdActive = false;
-    gameOver(); return;
+    if(shieldActive){ shieldActive=false; shieldTimer=0; triggerFlash('#00e5ff', 0.45); }
+    else { gameOver(); return; }
   }
 
   // Collision check (AABB dino vs cactus)
   if(obsX < 84 && obsX > 46 && dinoY > GROUND-28){
-    gameOver();
-    return;
+    if(shieldActive){ shieldActive=false; shieldTimer=0; obsX=W+300; triggerFlash('#00e5ff', 0.45); }
+    else { gameOver(); return; }
   }
 
   // Continue animation loop

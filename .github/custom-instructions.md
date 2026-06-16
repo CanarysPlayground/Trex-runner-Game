@@ -23,3 +23,6 @@
 - Avoid modifying obstacle collision logic
 - Terrain transitions must remain testable
 
+
+- Minimal changes
+- Do not rewrite full files
