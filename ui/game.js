@@ -23,6 +23,22 @@ let rafId = null;
 
 window.gameScore = 0;
 
+// ── Difficulty profiles ─────────────────────────────────────
+const DIFFICULTY_PROFILES = {
+  easy:   { obsSpeed: 4, obsGapMin: 250, obsGapRange: 200, scoreMultiplier: 1, cloudSpeedScale: 0.6 },
+  medium: { obsSpeed: 6, obsGapMin: 0,   obsGapRange: 200, scoreMultiplier: 1, cloudSpeedScale: 1.0 },
+  hard:   { obsSpeed: 9, obsGapMin: 0,   obsGapRange: 100, scoreMultiplier: 2, cloudSpeedScale: 1.4 },
+};
+window.selectedDifficulty = 'medium';
+
+document.querySelectorAll('input[name="difficulty"]').forEach(r => {
+  r.addEventListener('change', e => {
+    window.selectedDifficulty = e.target.value;
+    const diffDisplay = document.getElementById('difficulty-display');
+    if (diffDisplay) diffDisplay.textContent = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
+  });
+});
+
 // ── Clouds ──────────────────────────────────────────────────
 const clouds = [
   {x:120, y:35, w:90, speed:0.6},
@@ -205,6 +221,7 @@ function drawIdle(){
 // ── Start game ───────────────────────────────────────────────
 function startGame(){
   if(rafId) cancelAnimationFrame(rafId);
+  const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
   stripeOffset=0;
@@ -212,6 +229,16 @@ function startGame(){
   clouds[0].x=120; clouds[1].x=340; clouds[2].x=580; clouds[3].x=720;
   // Scatter birds off-screen so they fly in naturally
   birds[0].x=W+100; birds[1].x=W+280; birds[2].x=W+520;
+  // Apply cloud/bird speed scaling
+  const baseCloudSpeeds = [0.6, 0.4, 0.7, 0.5];
+  clouds.forEach((cl, i) => { cl.speed = baseCloudSpeeds[i] * diffConfig.cloudSpeedScale; });
+  const baseBirdSpeeds = [2.2, 1.8, 2.5];
+  birds.forEach((b, i) => { b.speed = baseBirdSpeeds[i] * diffConfig.cloudSpeedScale; });
+  // Disable selector during play
+  document.getElementById('difficulty-selector').querySelectorAll('input').forEach(r => r.disabled = true);
+  // Update HUD display
+  const diffDisplay = document.getElementById('difficulty-display');
+  if (diffDisplay) diffDisplay.textContent = window.selectedDifficulty.charAt(0).toUpperCase() + window.selectedDifficulty.slice(1);
   state='running';
   window.gameScore=0;
   startBtn.textContent='Restart';
@@ -224,6 +251,8 @@ function gameOver(){
   state='over';
   startBtn.textContent='Restart';
   setStatus('Game Over! Score: '+score+' — click Restart to play again');
+  // Re-enable difficulty selector
+  document.getElementById('difficulty-selector').querySelectorAll('input').forEach(r => r.disabled = false);
   // Draw frozen scene
   drawScene(0, false);
   fetch('http://localhost:3000/score/'+score,{method:'POST'})
@@ -244,12 +273,13 @@ function loop(){
   if(dinoY >= GROUND){ dinoY=GROUND; dinoVY=0; }
 
   // Cactus
-  obsX -= 6;
-  if(obsX < -40){ obsX=W + Math.floor(Math.random()*200); score++; }
+  const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
+  obsX -= diffConfig.obsSpeed;
+  if(obsX < -40){ obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange); score += diffConfig.scoreMultiplier; }
   window.gameScore = score;
 
   // Road stripes scroll
-  stripeOffset = (stripeOffset + 6) % 110;
+  stripeOffset = (stripeOffset + diffConfig.obsSpeed) % 110;
 
   // Clouds
   clouds.forEach(cl=>{
