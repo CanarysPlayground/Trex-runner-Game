@@ -32,27 +32,6 @@ let birdX = -200;
 let birdY = BIRD_Y_LOW;
 let birdActive = false;
 let birdSpawnCooldown = 180;
-let shieldActive = false;
-
-// ── Power-up constants ───────────────────────────────────────
-const POWERUP_W = 24, POWERUP_H = 24;
-const POWERUP_Y = GROUND - 10;   // token center sits just above road (y=175)
-const SHIELD_DURATION     = 300;  // frames (~5 s at 60 fps)
-const BOOST_DURATION      = 480;  // frames (~8 s at 60 fps)
-const SLOWMOTION_DURATION = 360;  // frames (~6 s at 60 fps)
-
-// ── Power-up state ───────────────────────────────────────────
-let powerupType          = 'shield';  // 'shield' | 'scoreBoost' | 'slowMotion'
-let powerupX             = -200;
-let powerupActive        = false;
-let powerupSpawnCooldown = 300;
-let shieldTimer          = 0;
-let scoreBoostActive     = false;
-let scoreBoostTimer      = 0;
-let birdHitCooldown      = 0;    // invincibility frames after shield absorbs a bird
-let birdWasAbsorbed      = false; // suppresses dodge bonus when shield took the hit
-let slowMotionActive     = false;
-let slowMotionTimer      = 0;
 
 // ── Terrain switching (Dynamic Desert ↔ Ice) ────────────────
 let terrain              = 'desert';       // 'desert' | 'ice'
@@ -197,13 +176,6 @@ function playSound(type){
       g.gain.setValueAtTime(0.12, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
       o.start(t); o.stop(t + 0.15);
-    } else if(type === 'collect'){
-      o.type = 'sine';
-      o.frequency.setValueAtTime(440, t);
-      o.frequency.exponentialRampToValueAtTime(880, t + 0.1);
-      g.gain.setValueAtTime(0.1, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-      o.start(t); o.stop(t + 0.22);
     } else if(type === 'die'){
       o.type = 'sawtooth';
       o.frequency.setValueAtTime(380, t);
@@ -389,15 +361,6 @@ function spawnBird(){
   birdActive = true;
 }
 
-// ── Spawn power-up token ─────────────────────────────────────
-function spawnPowerup(){
-  if(obsX < 350) return;  // cactus gap guard — don't overlap with nearby cactus
-  const r = Math.random();
-  powerupType   = r < 0.34 ? 'shield' : r < 0.67 ? 'scoreBoost' : 'slowMotion';
-  powerupX      = W + 60 + Math.floor(Math.random() * 150);
-  powerupActive = true;
-}
-
 // ── Draw obstacle bird (trex-ui-skill: Cyber aesthetic) ─────────────────────
 // Altitude-coded neon colour: red = low threat (must jump), cyan = high (apex timing).
 // Wings driven by physics-like sine with ±9 px displacement — transform only.
@@ -490,83 +453,6 @@ function _drawBirdShape(x, y, flap, wingColor, bodyColor){
   ctx.stroke();
 }
 
-// ── Draw power-up token ──────────────────────────────────────
-function drawPowerup(){
-  if(!powerupActive) return;
-  ctx.save();
-  if(powerupType === 'shield'){
-    ctx.fillStyle   = 'rgba(52,152,219,0.85)';
-    ctx.strokeStyle = '#1a6fa0';
-  } else if(powerupType === 'slowMotion'){
-    ctx.fillStyle   = 'rgba(155,89,182,0.85)';
-    ctx.strokeStyle = '#6c3483';
-  } else {
-    ctx.fillStyle   = 'rgba(241,196,15,0.85)';
-    ctx.strokeStyle = '#b7950b';
-  }
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(powerupX + POWERUP_W * 0.5, POWERUP_Y, POWERUP_W * 0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle    = '#fff';
-  ctx.font         = 'bold 13px Segoe UI,sans-serif';
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(powerupType === 'shield' ? 'S' : powerupType === 'slowMotion' ? 'SL' : 'B', powerupX + POWERUP_W * 0.5, POWERUP_Y);
-  ctx.restore();
-}
-
-// ── Draw power-up HUD bars ───────────────────────────────────
-function drawPowerupHUD(){
-  const BAR_W = 80, BAR_H = 8, BAR_X = W - 90, BASE_Y = 14;
-  let offset = 0;
-  if(shieldActive && shieldTimer > 0){
-    const fill = (shieldTimer / SHIELD_DURATION) * BAR_W;
-    ctx.save();
-    ctx.fillStyle = 'rgba(52,152,219,0.30)';
-    ctx.fillRect(BAR_X, BASE_Y + offset, BAR_W, BAR_H);
-    ctx.fillStyle = '#3498db';
-    ctx.fillRect(BAR_X, BASE_Y + offset, fill, BAR_H);
-    ctx.fillStyle    = '#1a4a6b';
-    ctx.font         = '9px Segoe UI,sans-serif';
-    ctx.textAlign    = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SHIELD', BAR_X - 4, BASE_Y + offset + BAR_H * 0.5);
-    ctx.restore();
-    offset += 16;
-  }
-  if(scoreBoostActive && scoreBoostTimer > 0){
-    const fill = (scoreBoostTimer / BOOST_DURATION) * BAR_W;
-    ctx.save();
-    ctx.fillStyle = 'rgba(241,196,15,0.30)';
-    ctx.fillRect(BAR_X, BASE_Y + offset, BAR_W, BAR_H);
-    ctx.fillStyle = '#f1c40f';
-    ctx.fillRect(BAR_X, BASE_Y + offset, fill, BAR_H);
-    ctx.fillStyle    = '#1a4a6b';
-    ctx.font         = '9px Segoe UI,sans-serif';
-    ctx.textAlign    = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('BOOST', BAR_X - 4, BASE_Y + offset + BAR_H * 0.5);
-    ctx.restore();
-    offset += 16;
-  }
-  if(slowMotionActive && slowMotionTimer > 0){
-    const fill = (slowMotionTimer / SLOWMOTION_DURATION) * BAR_W;
-    ctx.save();
-    ctx.fillStyle = 'rgba(155,89,182,0.30)';
-    ctx.fillRect(BAR_X, BASE_Y + offset, BAR_W, BAR_H);
-    ctx.fillStyle = '#9b59b6';
-    ctx.fillRect(BAR_X, BASE_Y + offset, fill, BAR_H);
-    ctx.fillStyle    = '#1a4a6b';
-    ctx.font         = '9px Segoe UI,sans-serif';
-    ctx.textAlign    = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SLOW', BAR_X - 4, BASE_Y + offset + BAR_H * 0.5);
-    ctx.restore();
-  }
-}
-
 // ── Check and apply terrain switch (observer pattern) ─────
 function checkTerrainTrigger(){
   // Only trigger in Easy Mode, at score >= 5, and only once per game
@@ -590,7 +476,6 @@ function drawScene(tick, moving){
   drawBirds(tick);
   drawBird(tick);
   drawGround(moving, terrain);
-  drawPowerup();
   // Cactus (only draw if not off screen in idle)
   if(obsX < W+10){
     ctx.drawImage(cactusImg, obsX, GROUND-50, 30, 55);
@@ -603,7 +488,6 @@ function drawScene(tick, moving){
   ctx.fillStyle='#1a4a6b';
   ctx.font='bold 15px Segoe UI,sans-serif';
   ctx.fillText('Score: '+score, 12, 22);
-  drawPowerupHUD();
   drawMilestone();
   drawFlash();
 }
@@ -633,10 +517,7 @@ function startGame(){
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
   // Reset positions
   dinoY=GROUND; dinoVY=0; score=0; obsX=W;
-  birdX=-200; birdY=BIRD_Y_LOW; birdActive=false; birdSpawnCooldown=180; shieldActive=false;
-  powerupX=-200; powerupActive=false; powerupSpawnCooldown=300;
-  shieldTimer=0; scoreBoostActive=false; scoreBoostTimer=0; birdHitCooldown=0; birdWasAbsorbed=false;
-  slowMotionActive=false; slowMotionTimer=0;
+  birdX=-200; birdY=BIRD_Y_LOW; birdActive=false; birdSpawnCooldown=180;
   stripeOffset=0;
   // Reset terrain to desert
   terrain='desert';
@@ -706,12 +587,12 @@ function loop(){
 
   // Cactus
   const diffConfig = DIFFICULTY_PROFILES[window.selectedDifficulty] || DIFFICULTY_PROFILES.medium;
-  const effectiveObsSpeed = diffConfig.obsSpeed * (slowMotionActive ? 0.5 : 1);
+  const effectiveObsSpeed = diffConfig.obsSpeed;
   obsX -= effectiveObsSpeed;
   if(obsX < -40){
     obsX=W + diffConfig.obsGapMin + Math.floor(Math.random()*diffConfig.obsGapRange);
     const prevScore = score;
-    score += diffConfig.scoreMultiplier * (scoreBoostActive ? 2 : 1);
+    score += diffConfig.scoreMultiplier;
     checkMilestone(prevScore, score);
     // Check terrain trigger after score update (read-only observer)
     checkTerrainTrigger();
@@ -720,16 +601,6 @@ function loop(){
   window.birdActive = birdActive;
   window.birdX = birdX;
   window.birdY = birdY;
-  window.shieldActive = shieldActive;
-  window.powerupActive = powerupActive;
-  window.powerupType = powerupType;
-  window.scoreBoostActive = scoreBoostActive;
-  window.shieldTimer = shieldTimer;
-  window.scoreBoostTimer = scoreBoostTimer;
-  window.birdHitCooldown = birdHitCooldown;
-  window.birdWasAbsorbed = birdWasAbsorbed;
-  window.slowMotionActive = slowMotionActive;
-  window.slowMotionTimer = slowMotionTimer;
   window.effectiveObsSpeed = effectiveObsSpeed;
 
   // Road stripes scroll
@@ -757,46 +628,10 @@ function loop(){
     birdSpawnCooldown = 220 + Math.floor(Math.random() * 160);
   }
   if(birdActive){
-    birdX -= BIRD_SPEED_BASE * (slowMotionActive ? 0.5 : 1);
+    birdX -= BIRD_SPEED_BASE;
     if(birdX < -60){
-      // Dodge bonus: only when shield did not absorb this bird
-      if(!birdWasAbsorbed) score += 10 * (scoreBoostActive ? 2 : 1);
-      birdWasAbsorbed = false;
+      score += 10;
       birdActive = false;
-    }
-  }
-
-  // Power-up timers
-  if(shieldTimer > 0){ shieldTimer--; if(shieldTimer <= 0){ shieldActive=false; shieldTimer=0; } }
-  if(scoreBoostTimer > 0){ scoreBoostTimer--; if(scoreBoostTimer <= 0){ scoreBoostActive=false; scoreBoostTimer=0; } }
-  if(slowMotionTimer > 0){ slowMotionTimer--; if(slowMotionTimer <= 0){ slowMotionActive=false; slowMotionTimer=0; } }
-  if(birdHitCooldown > 0) birdHitCooldown--;
-
-  // Power-up token — spawn, move, collect
-  powerupSpawnCooldown--;
-  if(!powerupActive && powerupSpawnCooldown <= 0 && score >= 3){
-    spawnPowerup();
-    powerupSpawnCooldown = 400 + Math.floor(Math.random() * 200);
-  }
-  if(powerupActive){
-    powerupX -= effectiveObsSpeed;
-    if(powerupX < -40){
-      powerupActive = false;
-    } else {
-      // Collection AABB: dino x:40–84, y:(dinoY-32)–(dinoY+12); token circle center x=powerupX+12, y=POWERUP_Y r=12
-      const puTop = POWERUP_Y - POWERUP_W * 0.5, puBot = POWERUP_Y + POWERUP_W * 0.5;
-      if(powerupX < 84 && powerupX + POWERUP_W > 40 && puTop < dinoY + 12 && puBot > dinoY - 32){
-        powerupActive = false;
-        playSound('collect');
-        triggerFlash('#2ecc71', 0.22);
-        if(powerupType === 'shield' && !shieldActive){
-          shieldActive = true; shieldTimer = SHIELD_DURATION;
-        } else if(powerupType === 'scoreBoost' && !scoreBoostActive){
-          scoreBoostActive = true; scoreBoostTimer = BOOST_DURATION;
-        } else if(powerupType === 'slowMotion' && !slowMotionActive){
-          slowMotionActive = true; slowMotionTimer = SLOWMOTION_DURATION;
-        }
-      }
     }
   }
 
@@ -806,17 +641,10 @@ function loop(){
   // Collision: AABB dino vs obstacle bird (checked before cactus)
   // Dino occupies x:40–84, y:(dinoY-32)–(dinoY+12)
   // Bird hitbox: x:birdX–(birdX+BIRD_W), y:(birdY-11)–(birdY+11)
-  if(birdActive && birdHitCooldown <= 0 && birdX < 84 && birdX + BIRD_W > 40 &&
+  if(birdActive && birdX < 84 && birdX + BIRD_W > 40 &&
      birdY > dinoY - 43 && birdY < dinoY + 23){
-    if(shieldActive){
-      // Shield absorbs the hit — bird passes through, no game-over
-      shieldActive = false; shieldTimer = 0;
-      birdHitCooldown = 30;
-      birdWasAbsorbed = true;
-    } else {
-      birdActive = false;
-      gameOver(); return;
-    }
+    birdActive = false;
+    gameOver(); return;
   }
 
   // Collision check (AABB dino vs cactus)

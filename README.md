@@ -65,18 +65,11 @@ Three profiles selectable before the game starts (radio buttons in the HUD):
 - Two heights: **low** (160 px — must jump) and **high** (82 px — timing challenge near jump apex)
 - Spawn cooldown resets after each bird
 
-### Power-ups (spawn when `score >= 5`)
-| Power-up | Duration | Effect |
-|----------|----------|--------|
-| Shield | ~5 s (300 frames) | Absorbs one bird hit; grants dodge bonus |
-| Score Boost | ~8 s (480 frames) | Multiplies score gain |
-| Slow Motion | ~6 s (360 frames) | Reduces obstacle speed |
-
 ### Sound Effects
 Web Audio API oscillator sounds for:
 - **Jump** — sine wave sweep 280 Hz → 560 Hz
-- **Collect** — power-up pickup tone
 - **Game Over** — collision sound
+- **Land** — soft thud on ground landing
 
 ### Visuals
 - SVG sprites for dino and cactus (inline data URIs, no external assets)
@@ -158,9 +151,9 @@ TREX_GAME_URL=http://localhost:8080/ui/ npx playwright test
 
 | Spec | Areas Covered |
 |------|--------------|
-| `trex-e2e.spec.js` | UI init, dino physics, cactus, difficulty profiles, bird obstacle, shield, score boost, slow motion, power-up interactions, game-over/restart, high-score API |
+| `trex-e2e.spec.js` | UI init, dino physics, cactus, difficulty profiles, bird obstacle, game-over/restart, high-score API |
 | `trex-jump.spec.js` | Jump mechanics, keyboard interaction, bird-unlock threshold |
-| `bird-obstacle.spec.ts` | Bird spawn threshold, height variants, shield absorption, dodge bonus |
+| `bird-obstacle.spec.ts` | Bird spawn threshold, height variants, dodge bonus |
 | `terrain-switch.spec.ts` | Terrain switch trigger (Easy + score ≥ 5), canvas pixel colour validation, restart resets terrain, difficulty change resets terrain, edge cases |
 
 ---
@@ -172,7 +165,7 @@ TREX_GAME_URL=http://localhost:8080/ui/ npx playwright test
 - `page.on('pageerror')` — catch silent JS errors during gameplay
 - `page.waitForRequest()` — intercept `POST /score/:value` on collision
 - Canvas `boundingBox()` dimension assertions
-- Difficulty-aware speed/multiplier validation
+- Difficulty-aware speed validation
 
 ---
 
